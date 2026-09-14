@@ -1,0 +1,134 @@
+// UniEvents — Prisma schema (SQLite)
+// Note: SQLite does not support native enums, so role/status/type are String fields
+// validated at the application layer (see src/lib/constants.ts).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   @default("student") // student | organizer | admin
+  department   String?
+  studentId    String?
+  avatarColor  String? // gradient key for the avatar chip
+  createdAt    DateTime @default(now())
+
+  hostedEvents  Event[]        @relation("EventHost")
+  coHostFor     EventCoHost[]
+  registrations Registration[]
+  feedback      Feedback[]
+}
+
+model Category {
+  id     String  @id @default(cuid())
+  name   String  @unique
+  slug   String  @unique
+  color  String // hex, e.g. #2563EB
+  icon   String // lucide icon key, e.g. "Cpu"
+  events Event[]
+}
+
+model Event {
+  id                   String   @id @default(cuid())
+  slug                 String   @unique
+  title                String
+  description          String
+  location             String
+  startsAt             DateTime
+  endsAt               DateTime
+  seatLimit            Int
+  registrationDeadline DateTime?
+  coverImage           String?
+  featured             Boolean  @default(false)
+  status               String   @default("published") // draft | published | cancelled
+  tags                 String? // JSON array of strings
+  agenda               String? // JSON array of { time, title, speaker }
+  speakers             String? // JSON array of { name, role, initials }
+  qrCheckinEnabled     Boolean  @default(true)
+  sendConfirmation     Boolean  @default(true)
+  sendReminder         Boolean  @default(true)
+  allowCancellation    Boolean  @default(false)
+  requireApproval      Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  hostId String
+  host   User   @relation("EventHost", fields: [hostId], references: [id])
+
+  coHosts       EventCoHost[]
+  registrations Registration[]
+  feedback      Feedback[]
+
+  @@index([startsAt])
+  @@index([categoryId])
+}
+
+model EventCoHost {
+  eventId String
+  userId  String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, userId])
+}
+
+model Registration {
+  id          String    @id @default(cuid())
+  eventId     String
+  userId      String
+  status      String    @default("registered") // registered | cancelled
+  ticketCode  String    @unique
+  seatNumber  Int?
+  checkedInAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
+}
+
+model Feedback {
+  id        String   @id @default(cuid())
+  eventId   String
+  userId    String
+  rating    Int // 1..5
+  comment   String?
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+}
+
+// The in-app "Outbox": every email is rendered to HTML and stored here instead of sent.
+model EmailMessage {
+  id             String   @id @default(cuid())
+  to             String
+  toName         String?
+  subject        String
+  type           String // confirmation | reminder | feedback_request | cancellation
+  html           String
+  relatedEventId String?
+  userId         String?
+  createdAt      DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}

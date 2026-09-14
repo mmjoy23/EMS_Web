@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(php --version)",
+      "Bash(npm --prefix \"G:/Online Management System/server\" install)",
+      "Bash(npm --prefix \"G:/Online Management System/server\" run db:push)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(node scripts/smoke.mjs)",
+      "Bash(grep -v -E '^\\\\.$|^\\\\.\\\\.$')"
+    ]
+  }
+}
