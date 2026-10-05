@@ -34,6 +34,19 @@ export const createEventSchema = z.object({
     .max(100000000)
     .optional()
     .default(0),
+  pricingMode: z.enum(["free", "fixed", "category"]).optional().default("free"),
+  seatCategories: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(80),
+        priceCents: z.coerce.number().int().min(0).max(100000000),
+        totalSeats: z.coerce.number().int().min(1).max(100000),
+        sortOrder: z.coerce.number().int().min(0).optional().default(0),
+      }),
+    )
+    .max(20)
+    .optional()
+    .default([]),
   registrationDeadline: isoDate.optional().nullable(),
   coverImage: z.string().trim().url().optional().nullable(),
   featured: z.boolean().optional().default(false),

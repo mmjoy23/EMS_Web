@@ -104,6 +104,13 @@ export interface EventInput {
   endsAt: string;
   seatLimit: number;
   priceCents?: number;
+  pricingMode?: "free" | "fixed" | "category";
+  seatCategories?: {
+    name: string;
+    priceCents: number;
+    totalSeats: number;
+    sortOrder?: number;
+  }[];
   registrationDeadline?: string | null;
   coverImage?: string | null;
   featured?: boolean;
@@ -172,8 +179,8 @@ export const api = {
   },
 
   registrations: {
-    create: (eventId: string) =>
-      post<{ registration: Registration }>("/registrations", { eventId }),
+    create: (eventId: string, seatCategoryId?: string | null) =>
+      post<{ registration: Registration }>("/registrations", { eventId, seatCategoryId }),
     remove: (eventId: string) =>
       del<{ registration: Registration }>(`/registrations/${eventId}`),
     cancellationPreview: (eventId: string) =>

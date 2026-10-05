@@ -39,6 +39,7 @@ const fullInclude = {
   category: true,
   host: true,
   coHosts: { include: { user: true } },
+  seatCategories: { include: { registrations: { select: { status: true } } }, orderBy: { sortOrder: "asc" as const } },
 } as const;
 
 function baseSlug(title: string): string {
@@ -256,7 +257,8 @@ router.post(
         startsAt: data.startsAt,
         endsAt: data.endsAt,
         seatLimit: data.seatLimit,
-        priceCents: data.priceCents,
+        priceCents: data.pricingMode === "fixed" ? (data.priceCents ?? 0) : 0,
+        pricingMode: data.pricingMode ?? "free",
         registrationDeadline: data.registrationDeadline ?? null,
         coverImage: data.coverImage ?? null,
         featured: data.featured ?? false,
@@ -275,6 +277,15 @@ router.post(
         coHosts: coHostIds.length
           ? { create: coHostIds.map((userId) => ({ userId })) }
           : undefined,
+        seatCategories:
+          data.pricingMode === "category" && data.seatCategories?.length
+            ? { create: data.seatCategories.map((sc) => ({
+                name: sc.name,
+                priceCents: sc.priceCents,
+                totalSeats: sc.totalSeats,
+                sortOrder: sc.sortOrder ?? 0,
+              })) }
+            : undefined,
       },
       include: fullInclude,
     });
@@ -304,6 +315,7 @@ router.patch(
     if (data.endsAt !== undefined) patch.endsAt = data.endsAt;
     if (data.seatLimit !== undefined) patch.seatLimit = data.seatLimit;
     if (data.priceCents !== undefined) patch.priceCents = data.priceCents;
+    if (data.pricingMode !== undefined) patch.pricingMode = data.pricingMode;
     if (data.registrationDeadline !== undefined)
       patch.registrationDeadline = data.registrationDeadline ?? null;
     if (data.coverImage !== undefined)

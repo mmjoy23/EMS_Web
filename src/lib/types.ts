@@ -48,6 +48,16 @@ export interface Category {
   eventCount?: number;
 }
 
+export interface SeatCategory {
+  id: string;
+  name: string;
+  priceCents: number;
+  totalSeats: number;
+  sortOrder: number;
+  registeredCount?: number;
+  remainingSeats?: number;
+}
+
 export interface AgendaItem {
   time: string;
   title: string;
@@ -71,6 +81,7 @@ export interface EventDTO {
   registrationDeadline: string | null;
   seatLimit: number;
   priceCents: number;
+  pricingMode: "free" | "fixed" | "category";
   registeredCount: number;
   remaining: number;
   checkedInCount: number;
@@ -86,6 +97,7 @@ export interface EventDTO {
   tags: string[];
   agenda: AgendaItem[];
   speakers: Speaker[];
+  seatCategories: SeatCategory[];
   category: Category | null;
   host: Person | null;
   coHosts: Person[];
@@ -104,6 +116,11 @@ export interface Registration {
   seatNumber: number | null;
   checkedIn: boolean;
   checkedInAt: string | null;
+  paidAmountCents?: number;
+  paymentStatus?: string;
+  seatCategoryId?: string | null;
+  selectedCategoryName?: string | null;
+  selectedCategoryPriceCents?: number | null;
   createdAt: string;
   event?: EventDTO;
   user?: Person;
@@ -152,6 +169,7 @@ export interface Ticket {
   checkedIn: boolean;
   checkedInAt: string | null;
   holderName: string;
+  selectedCategoryName?: string | null;
   event: EventDTO;
 }
 

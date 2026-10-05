@@ -99,6 +99,7 @@ export function EventDetails({ nav, params }: ScreenProps) {
     msg: "",
     visible: false,
   });
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
 
   const showFlash = (msg: string) => {
     setFlash({ msg, visible: true });
@@ -135,9 +136,13 @@ export function EventDetails({ nav, params }: ScreenProps) {
   const cc = catGradient(event.category?.slug);
 
   const doRegister = async () => {
+    if (event.pricingMode === "category" && !selectedCategoryId) {
+      toast.error("Please select a ticket category");
+      return;
+    }
     setBusy(true);
     try {
-      await api.registrations.create(event.id);
+      await api.registrations.create(event.id, selectedCategoryId);
       toast.success(
         "You're registered! A confirmation is waiting in your inbox.",
       );
@@ -504,9 +509,11 @@ export function EventDetails({ nav, params }: ScreenProps) {
               <div className="flex items-center justify-between rounded-xl bg-slate-50 dark:bg-slate-700/60 px-3 py-2 text-sm">
                 <span className="text-slate-500">Entry fee</span>
                 <strong className="text-slate-900 dark:text-white">
-                  {event.priceCents > 0
-                    ? `৳${(event.priceCents / 100).toFixed(2)}`
-                    : "Free"}
+                  {event.pricingMode === "category"
+                    ? "Prices vary"
+                    : event.priceCents > 0
+                      ? `৳${(event.priceCents / 100).toFixed(2)}`
+                      : "Free"}
                 </strong>
               </div>
               {cancelled ? (
@@ -729,6 +736,54 @@ export function EventDetails({ nav, params }: ScreenProps) {
                 </span>
               </div>
             </div>
+            {event.pricingMode === "category" && event.seatCategories.length > 0 && (
+              <div className="mb-5 space-y-2">
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  Select Ticket Category
+                </p>
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {event.seatCategories.map((cat) => (
+                    <label
+                      key={cat.id}
+                      className={cn(
+                        "flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all",
+                        selectedCategoryId === cat.id
+                          ? "border-blue-600 bg-blue-50 dark:bg-blue-900/30"
+                          : "border-slate-200 dark:border-slate-700 hover:border-blue-300",
+                        cat.remainingSeats === 0 ? "opacity-50 pointer-events-none" : ""
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="radio"
+                          name="seatCategory"
+                          value={cat.id}
+                          checked={selectedCategoryId === cat.id}
+                          onChange={() => setSelectedCategoryId(cat.id)}
+                          className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                          disabled={cat.remainingSeats === 0}
+                        />
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold text-slate-900 dark:text-white">
+                            {cat.name}
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            {cat.remainingSeats === 0
+                              ? "Sold out"
+                              : `${cat.remainingSeats} left`}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-sm font-bold text-slate-900 dark:text-white">
+                        {cat.priceCents > 0
+                          ? `৳${(cat.priceCents / 100).toFixed(2)}`
+                          : "Free"}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
             <p className="text-xs text-slate-400 text-center mb-4">
               A QR code confirmation will be sent to{" "}
               {user?.email ?? "your inbox"}

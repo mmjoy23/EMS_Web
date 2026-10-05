@@ -53,6 +53,7 @@ model Event {
   endsAt               DateTime
   seatLimit            Int
   priceCents          Int       @default(0)
+  pricingMode          String    @default("free") // free | fixed | category
   registrationDeadline DateTime?
   coverImage           String?
   featured             Boolean   @default(false)
@@ -79,14 +80,29 @@ model Event {
   host       User   @relation("EventHost", fields: [hostId], references: [id])
   reviewedBy User?  @relation("EventReviewer", fields: [reviewedById], references: [id])
 
-  coHosts       EventCoHost[]
-  registrations Registration[]
-  feedback      Feedback[]
-  complaints    Complaint[]
-  fines         Fine[]
+  coHosts        EventCoHost[]
+  registrations  Registration[]
+  feedback       Feedback[]
+  complaints     Complaint[]
+  fines          Fine[]
+  seatCategories SeatCategory[]
 
   @@index([startsAt])
   @@index([categoryId])
+}
+
+model SeatCategory {
+  id           String  @id @default(cuid())
+  eventId      String
+  name         String  // e.g. "Priority 1"
+  priceCents   Int     @default(0)
+  totalSeats   Int     // organizer-configured quantity
+  sortOrder    Int     @default(0)
+
+  event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  registrations Registration[]
+
+  @@index([eventId])
 }
 
 model EventCoHost {
@@ -99,21 +115,23 @@ model EventCoHost {
 }
 
 model Registration {
-  id            String    @id @default(cuid())
-  eventId       String
-  userId        String
-  status        String    @default("registered") // registered | cancelled
-  ticketCode    String    @unique
-  seatNumber    Int?
-  checkedInAt   DateTime?
-  checkedInById String?
-  paidAmountCents Int @default(0)
-  paymentStatus String @default("succeeded") // succeeded | pending | failed
-  createdAt     DateTime  @default(now())
+  id              String    @id @default(cuid())
+  eventId         String
+  userId          String
+  status          String    @default("registered") // registered | cancelled
+  ticketCode      String    @unique
+  seatNumber      Int?
+  checkedInAt     DateTime?
+  checkedInById   String?
+  paidAmountCents Int       @default(0)
+  paymentStatus   String    @default("succeeded") // succeeded | pending | failed
+  seatCategoryId  String?   // null for free/fixed events
+  createdAt       DateTime  @default(now())
 
-  event       Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user        User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  checkedInBy User? @relation("CheckinOperator", fields: [checkedInById], references: [id])
+  event        Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checkedInBy  User?         @relation("CheckinOperator", fields: [checkedInById], references: [id])
+  seatCategory SeatCategory? @relation(fields: [seatCategoryId], references: [id])
   cancellation Cancellation?
 
   @@unique([eventId, userId])

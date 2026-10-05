@@ -21,6 +21,10 @@ const eventInclude = {
   category: true,
   host: true,
   coHosts: { include: { user: true } },
+  seatCategories: {
+    include: { registrations: { select: { status: true } } },
+    orderBy: { sortOrder: "asc" as const },
+  },
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -34,13 +38,46 @@ router.post(
       typeof req.body?.eventId === "string" ? req.body.eventId : "";
     if (!eventId) throw badRequest("eventId is required");
     const userId = req.user!.id;
+    const seatCategoryId =
+      typeof req.body?.seatCategoryId === "string"
+        ? req.body.seatCategoryId
+        : null;
 
     // Serialized transaction guards against overselling the last seat.
     const registration = await prisma.$transaction(async (tx) => {
-      const event = await tx.event.findUnique({ where: { id: eventId } });
+      const event = await tx.event.findUnique({
+        where: { id: eventId },
+        include: { seatCategories: true },
+      });
       if (!event) throw notFound("Event not found");
       if (event.status !== EVENT_STATUS.PUBLISHED) {
         throw conflict("This event is not open for registration");
+      }
+
+      // --- Pricing mode validation ---
+      const pricingMode = (event as any).pricingMode ?? "free";
+      let resolvedCategoryId: string | null = null;
+      let paidAmountCents = 0;
+
+      if (pricingMode === "category") {
+        if (!seatCategoryId)
+          throw badRequest("Please select a seat category for this event");
+        const cat = (event.seatCategories ?? []).find(
+          (c: { id: string }) => c.id === seatCategoryId,
+        );
+        if (!cat) throw badRequest("Invalid seat category");
+        // Check category-level availability
+        const catCount = await tx.registration.count({
+          where: { seatCategoryId, status: REGISTRATION_STATUS.REGISTERED },
+        });
+        if (catCount >= (cat as any).totalSeats)
+          throw conflict(
+            `The "${(cat as any).name}" category is sold out`,
+          );
+        resolvedCategoryId = seatCategoryId;
+        paidAmountCents = (cat as any).priceCents;
+      } else if (pricingMode === "fixed") {
+        paidAmountCents = event.priceCents;
       }
 
       const existing = await tx.registration.findUnique({
@@ -74,8 +111,11 @@ router.post(
             seatNumber,
             checkedInAt: null,
             ticketCode: existing.ticketCode || newTicketCode(),
-            paymentStatus: event.priceCents > 0 ? "pending" : "succeeded",
+            paymentStatus: paidAmountCents > 0 ? "pending" : "succeeded",
+            paidAmountCents,
+            seatCategoryId: resolvedCategoryId,
           },
+          include: { seatCategory: true },
         });
       }
       return tx.registration.create({
@@ -85,10 +125,14 @@ router.post(
           status: REGISTRATION_STATUS.REGISTERED,
           ticketCode: newTicketCode(),
           seatNumber,
-          paymentStatus: event.priceCents > 0 ? "pending" : "succeeded",
+          paymentStatus: paidAmountCents > 0 ? "pending" : "succeeded",
+          paidAmountCents,
+          seatCategoryId: resolvedCategoryId,
         },
+        include: { seatCategory: true },
       });
     });
+
 
     // Confirmation email (Outbox) — outside the transaction.
     const event = await prisma.event.findUnique({
@@ -231,7 +275,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const rows = await prisma.registration.findMany({
       where: { userId: req.user!.id },
-      include: { event: { include: eventInclude } },
+      include: { event: { include: eventInclude }, seatCategory: true },
       orderBy: { event: { startsAt: "asc" } },
     });
     const counts = await computeEventCounts(rows.map((r) => r.eventId));
@@ -254,7 +298,7 @@ router.get(
     const { eventId } = req.params;
     const reg = await prisma.registration.findUnique({
       where: { eventId_userId: { eventId, userId: req.user!.id } },
-      include: { event: { include: eventInclude } },
+      include: { event: { include: eventInclude }, seatCategory: true },
     });
     if (!reg || reg.status !== REGISTRATION_STATUS.REGISTERED) {
       throw notFound("No active registration found for this event");
@@ -267,6 +311,8 @@ router.get(
         checkedIn: reg.checkedInAt != null,
         checkedInAt: reg.checkedInAt ? reg.checkedInAt.toISOString() : null,
         holderName: req.user!.name,
+        seatCategoryName: reg.seatCategory?.name ?? null,
+        paidAmountCents: reg.paidAmountCents,
         event: serializeEvent(reg.event, counts.get(eventId)),
       },
     });

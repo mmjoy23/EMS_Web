@@ -14,6 +14,15 @@ function parseJson<T>(raw: string | null | undefined, fallback: T): T {
 
 export type AgendaItem = { time: string; title: string; speaker?: string };
 export type Speaker = { name: string; role?: string; initials?: string };
+export type SeatCategoryItem = {
+  id: string;
+  name: string;
+  priceCents: number;
+  totalSeats: number;
+  sortOrder: number;
+  registeredCount?: number;
+  remainingSeats?: number;
+};
 
 // ---- People ----
 
@@ -87,6 +96,7 @@ type EventLike = {
   endsAt: Date;
   seatLimit: number;
   priceCents?: number;
+  pricingMode?: string;
   registrationDeadline: Date | null;
   coverImage: string | null;
   featured: boolean;
@@ -104,12 +114,37 @@ type EventLike = {
   category?: CategoryLike | null;
   host?: UserLike | null;
   coHosts?: { user: UserLike }[];
+  seatCategories?: {
+    id: string;
+    name: string;
+    priceCents: number;
+    totalSeats: number;
+    sortOrder: number;
+    registrations?: { status: string }[];
+  }[];
 };
 
 export function serializeEvent(event: EventLike, counts?: EventCounts) {
   const registeredCount = counts?.registered ?? 0;
   const checkedInCount = counts?.checkedIn ?? 0;
   const remaining = remainingSeats(event.seatLimit, registeredCount);
+
+  // Build per-category seat availability
+  const seatCategories: SeatCategoryItem[] = (event.seatCategories ?? []).map((sc) => {
+    const catRegistered = (sc.registrations ?? []).filter(
+      (r) => r.status === "registered",
+    ).length;
+    return {
+      id: sc.id,
+      name: sc.name,
+      priceCents: sc.priceCents,
+      totalSeats: sc.totalSeats,
+      sortOrder: sc.sortOrder,
+      registeredCount: catRegistered,
+      remainingSeats: Math.max(0, sc.totalSeats - catRegistered),
+    };
+  });
+
   return {
     id: event.id,
     slug: event.slug,
@@ -123,6 +158,7 @@ export function serializeEvent(event: EventLike, counts?: EventCounts) {
       : null,
     seatLimit: event.seatLimit,
     priceCents: event.priceCents ?? 0,
+    pricingMode: event.pricingMode ?? "free",
     registeredCount,
     remaining,
     checkedInCount,
@@ -138,6 +174,7 @@ export function serializeEvent(event: EventLike, counts?: EventCounts) {
     tags: parseJson<string[]>(event.tags, []),
     agenda: parseJson<AgendaItem[]>(event.agenda, []),
     speakers: parseJson<Speaker[]>(event.speakers, []),
+    seatCategories,
     category: event.category ? serializeCategory(event.category) : null,
     host: event.host ? serializePerson(event.host) : null,
     coHosts: (event.coHosts ?? []).map((c) => serializePerson(c.user)),
@@ -156,6 +193,10 @@ type RegistrationLike = {
   ticketCode: string;
   seatNumber: number | null;
   checkedInAt: Date | null;
+  paidAmountCents?: number;
+  paymentStatus?: string;
+  seatCategoryId?: string | null;
+  seatCategory?: { name: string; priceCents: number } | null;
   createdAt: Date;
   event?: EventLike | null;
   user?: UserLike | null;
@@ -175,6 +216,11 @@ export function serializeRegistration(
     seatNumber: reg.seatNumber ?? null,
     checkedIn: reg.checkedInAt != null,
     checkedInAt: reg.checkedInAt ? reg.checkedInAt.toISOString() : null,
+    paidAmountCents: reg.paidAmountCents ?? 0,
+    paymentStatus: reg.paymentStatus ?? "succeeded",
+    seatCategoryId: reg.seatCategoryId ?? null,
+    selectedCategoryName: reg.seatCategory?.name ?? null,
+    selectedCategoryPriceCents: reg.seatCategory?.priceCents ?? null,
     createdAt: reg.createdAt.toISOString(),
     event: opts?.event ?? undefined,
     user: reg.user ? serializePerson(reg.user) : undefined,

@@ -95,6 +95,7 @@ import {
   ParticipantQrPass,
 } from "@/screens/ParticipantLiveScreens";
 import { api } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import type {
   AdminStats,
   AttendanceReport,
@@ -927,14 +928,12 @@ function TopNav({
   isDark,
   setIsDark,
   role,
-  setRole,
   screen,
 }: {
   nav: (s: Screen) => void;
   isDark: boolean;
   setIsDark: (v: boolean) => void;
   role: Role;
-  setRole: (r: Role) => void;
   screen: Screen;
 }) {
   const [bellOpen, setBellOpen] = useState(false);
@@ -1124,7 +1123,6 @@ function AppLayout({
   isDark,
   setIsDark,
   role,
-  setRole,
   screen,
   collapsed,
   setCollapsed,
@@ -1134,7 +1132,6 @@ function AppLayout({
   isDark: boolean;
   setIsDark: (v: boolean) => void;
   role: Role;
-  setRole: (r: Role) => void;
   screen: Screen;
   collapsed: boolean;
   setCollapsed: (v: boolean) => void;
@@ -1159,7 +1156,6 @@ function AppLayout({
           isDark={isDark}
           setIsDark={setIsDark}
           role={role}
-          setRole={setRole}
           screen={screen}
         />
         <main className="flex-1 p-6">
@@ -5110,7 +5106,9 @@ function CreateEventScreen({ nav }: { nav: (s: Screen) => void }) {
   const [endTime, setEndTime] = useState("17:00");
   const [location, setLocation] = useState("");
   const [seatLimit, setSeatLimit] = useState("200");
+  const [pricingMode, setPricingMode] = useState<"free" | "fixed" | "category">("free");
   const [price, setPrice] = useState("0");
+  const [seatCategories, setSeatCategories] = useState<{name: string; price: string; seats: string}[]>([]);
   const [registrationDeadline, setRegistrationDeadline] = useState("");
   const [settings, setSettings] = useState([
     ["Enable QR Code Check-in", true],
@@ -5141,6 +5139,19 @@ function CreateEventScreen({ nav }: { nav: (s: Screen) => void }) {
       );
       return;
     }
+    if (pricingMode === "category") {
+      if (seatCategories.length === 0) {
+        window.alert("Please add at least one seat category.");
+        return;
+      }
+      for (const cat of seatCategories) {
+        if (!cat.name.trim() || Number(cat.seats) < 1 || Number(cat.price) < 0) {
+          window.alert("Please ensure all seat categories have a name, valid price, and at least 1 seat.");
+          return;
+        }
+      }
+    }
+
     const startsAt = new Date(`${startDate}T${startTime}`);
     const endsAt = new Date(`${endDate}T${endTime}`);
     if (endsAt <= startsAt) {
@@ -5156,8 +5167,19 @@ function CreateEventScreen({ nav }: { nav: (s: Screen) => void }) {
         location: `${location.trim()}, ${fullAddress.trim()}`,
         startsAt: startsAt.toISOString(),
         endsAt: endsAt.toISOString(),
-        seatLimit: Number(seatLimit),
+        seatLimit: pricingMode === "category" 
+          ? seatCategories.reduce((sum, c) => sum + Number(c.seats), 0)
+          : Number(seatLimit),
+        pricingMode,
         priceCents: Math.round(Number(price || 0) * 100),
+        seatCategories: pricingMode === "category" 
+          ? seatCategories.map((c, i) => ({
+              name: c.name.trim(),
+              priceCents: Math.round(Number(c.price || 0) * 100),
+              totalSeats: Number(c.seats),
+              sortOrder: i,
+            }))
+          : undefined,
         registrationDeadline: registrationDeadline
           ? new Date(`${registrationDeadline}T23:59`).toISOString()
           : null,
@@ -5198,13 +5220,20 @@ function CreateEventScreen({ nav }: { nav: (s: Screen) => void }) {
       return;
     }
     if (
-      step === 3 &&
-      (!Number.isInteger(Number(seatLimit)) ||
-        Number(seatLimit) < 1 ||
-        Number(price) < 0)
+      step === 3
     ) {
-      window.alert("Please enter a valid maximum seat count.");
-      return;
+      if (pricingMode !== "category" && (!Number.isInteger(Number(seatLimit)) || Number(seatLimit) < 1)) {
+        window.alert("Please enter a valid maximum seat count.");
+        return;
+      }
+      if (pricingMode === "fixed" && Number(price) < 0) {
+        window.alert("Please enter a valid price.");
+        return;
+      }
+      if (pricingMode === "category" && seatCategories.length === 0) {
+        window.alert("Please add at least one seat category.");
+        return;
+      }
     }
     setStep((current) => current + 1);
   };
@@ -5443,30 +5472,131 @@ function CreateEventScreen({ nav }: { nav: (s: Screen) => void }) {
           <h3 className="font-bold text-slate-900 dark:text-white">
             Capacity and Settings
           </h3>
-          <div className="grid grid-cols-2 gap-4">
-            <InputField
-              label="Maximum Seats"
-              type="number"
-              placeholder="e.g. 200"
-              value={seatLimit}
-              onChange={setSeatLimit}
-            />
-            <InputField
-              label="Registration Deadline"
-              type="date"
-              value={registrationDeadline}
-              onChange={setRegistrationDeadline}
-            />
-            <InputField
-              label="Event Price (BDT, 0 = Free)"
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="e.g. 500"
-              value={price}
-              onChange={setPrice}
-            />
-          </div>
+            <div>
+              <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 block">
+                Pricing Mode
+              </label>
+              <select
+                value={pricingMode}
+                onChange={(e) => setPricingMode(e.target.value as any)}
+                className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="free">Free</option>
+                <option value="fixed">Fixed Price</option>
+                <option value="category">Category Wise Pricing</option>
+              </select>
+            </div>
+
+            {pricingMode !== "category" ? (
+              <div className="grid grid-cols-2 gap-4">
+                <InputField
+                  label="Maximum Seats"
+                  type="number"
+                  placeholder="e.g. 200"
+                  value={seatLimit}
+                  onChange={setSeatLimit}
+                />
+                <InputField
+                  label="Registration Deadline"
+                  type="date"
+                  value={registrationDeadline}
+                  onChange={setRegistrationDeadline}
+                />
+                {pricingMode === "fixed" && (
+                  <InputField
+                    label="Event Price (BDT)"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="e.g. 500"
+                    value={price}
+                    onChange={setPrice}
+                  />
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <InputField
+                  label="Registration Deadline"
+                  type="date"
+                  value={registrationDeadline}
+                  onChange={setRegistrationDeadline}
+                />
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                      Seat Categories
+                    </label>
+                    <Btn
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSeatCategories([...seatCategories, { name: "", price: "0", seats: "0" }])}
+                    >
+                      + Add Category
+                    </Btn>
+                  </div>
+                  <div className="space-y-2">
+                    {seatCategories.map((cat, i) => (
+                      <div key={i} className="flex gap-2 items-start bg-slate-50 dark:bg-slate-700/50 p-2 rounded-xl border border-slate-200 dark:border-slate-600">
+                        <div className="flex-1">
+                          <InputField
+                            label="Name"
+                            placeholder="e.g. VIP"
+                            value={cat.name}
+                            onChange={(v) => {
+                              const next = [...seatCategories];
+                              next[i].name = v;
+                              setSeatCategories(next);
+                            }}
+                          />
+                        </div>
+                        <div className="w-24">
+                          <InputField
+                            label="Price"
+                            type="number"
+                            min="0"
+                            value={cat.price}
+                            onChange={(v) => {
+                              const next = [...seatCategories];
+                              next[i].price = v;
+                              setSeatCategories(next);
+                            }}
+                          />
+                        </div>
+                        <div className="w-24">
+                          <InputField
+                            label="Seats"
+                            type="number"
+                            min="1"
+                            value={cat.seats}
+                            onChange={(v) => {
+                              const next = [...seatCategories];
+                              next[i].seats = v;
+                              setSeatCategories(next);
+                            }}
+                          />
+                        </div>
+                        <button
+                          className="mt-7 text-red-500 hover:text-red-700 p-1"
+                          onClick={() => {
+                            const next = [...seatCategories];
+                            next.splice(i, 1);
+                            setSeatCategories(next);
+                          }}
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                    ))}
+                    {seatCategories.length === 0 && (
+                      <p className="text-sm text-slate-500 text-center py-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                        No seat categories added yet.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           <div className="space-y-3 pt-2">
             {settings.map(([label, on], i) => (
               <div
@@ -7468,12 +7598,11 @@ export default function App() {
       }
     },
   );
-  const [role, setRole] = useState<Role>("student");
+  const { user, isLoggedIn, loading: authLoading, login: contextLogin, logout: contextLogout } = useAuth();
+  const role = user?.role || "student";
   const [isDark, setIsDark] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [registered, setRegistered] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [authReady, setAuthReady] = useState(false);
 
   const nav = useCallback(
     (s: Screen, nextParams: { eventId?: string; slug?: string } = {}) => {
@@ -7494,52 +7623,37 @@ export default function App() {
 
   const login = useCallback(
     (r: Role, email = "", password = "") => {
-      api.auth
-        .login(email.trim(), password === "••••••••" ? "password123" : password)
-        .then(({ user }) => {
-          setIsLoggedIn(true);
-          setRole(user.role);
+      contextLogin(email.trim(), password === "••••••••" ? "password123" : password)
+        .then((u) => {
           nav(
-            user.role === "student"
+            u.role === "student"
               ? "student-dashboard"
-              : user.role === "organizer"
+              : u.role === "organizer"
                 ? "organizer-dashboard"
                 : "admin-operations",
           );
         })
         .catch(() => undefined);
     },
-    [nav],
+    [nav, contextLogin],
   );
 
   const logout = useCallback(() => {
-    void api.auth.logout();
-    setIsLoggedIn(false);
+    void contextLogout();
     setRegistered(false);
     sessionStorage.removeItem("unievents-navigation");
     nav("landing");
-  }, [nav]);
+  }, [nav, contextLogout]);
 
   useEffect(() => {
-    api.auth
-      .me()
-      .then(({ user }) => {
-        if (user) {
-          setRole(user.role);
-          setIsLoggedIn(true);
-        } else if (!AUTH_SCREENS.includes(screen)) {
-          setScreen("landing");
-          setParams({});
-          sessionStorage.removeItem("unievents-navigation");
-        }
-      })
-      .catch(() => {
+    if (!authLoading) {
+      if (!isLoggedIn && !AUTH_SCREENS.includes(screen) && screen !== "event-details") {
         setScreen("landing");
         setParams({});
         sessionStorage.removeItem("unievents-navigation");
-      })
-      .finally(() => setAuthReady(true));
-  }, []);
+      }
+    }
+  }, [authLoading, isLoggedIn, screen]);
 
   useEffect(() => {
     if (isDark) document.documentElement.classList.add("dark");
@@ -7551,7 +7665,7 @@ export default function App() {
     AUTH_SCREENS.includes(screen) ||
     (!isLoggedIn && screen === "event-details");
 
-  if (!authReady) {
+  if (authLoading) {
     return <div className="min-h-screen bg-slate-50 dark:bg-slate-900" />;
   }
 
@@ -7711,7 +7825,6 @@ export default function App() {
       isDark={isDark}
       setIsDark={setIsDark}
       role={role}
-      setRole={setRole}
       screen={screen}
       collapsed={collapsed}
       setCollapsed={setCollapsed}
