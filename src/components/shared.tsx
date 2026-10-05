@@ -22,7 +22,12 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { qrDataUrl } from "@/lib/qr";
-import { formatDate, formatTime } from "@/lib/format";
+import {
+  formatDate,
+  formatTime,
+  isUpcoming,
+  remainingDays,
+} from "@/lib/format";
 import type { Category, EventDTO } from "@/lib/types";
 
 export { cn };
@@ -38,7 +43,13 @@ export function Btn({
   type = "button",
 }: {
   children: React.ReactNode;
-  variant?: "primary" | "secondary" | "outline" | "ghost" | "danger" | "success";
+  variant?:
+    | "primary"
+    | "secondary"
+    | "outline"
+    | "ghost"
+    | "danger"
+    | "success";
   size?: "xs" | "sm" | "md" | "lg";
   className?: string;
   onClick?: () => void;
@@ -52,7 +63,8 @@ export function Btn({
       "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700",
     outline:
       "border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800",
-    ghost: "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800",
+    ghost:
+      "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800",
     danger: "bg-red-600 text-white hover:bg-red-700",
     success: "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm",
   };
@@ -91,10 +103,12 @@ export function Badge({
 }) {
   const cs: Record<string, string> = {
     blue: "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300",
-    green: "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300",
+    green:
+      "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300",
     red: "bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300",
     amber: "bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300",
-    purple: "bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300",
+    purple:
+      "bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300",
     pink: "bg-pink-100 dark:bg-pink-950 text-pink-700 dark:text-pink-300",
     slate: "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400",
   };
@@ -105,7 +119,9 @@ export function Badge({
         cs[color] || cs.blue,
       )}
     >
-      {dot && <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80" />}
+      {dot && (
+        <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80" />
+      )}
       {children}
     </span>
   );
@@ -136,8 +152,10 @@ export function catBadge(
   category?: Pick<Category, "slug" | "name"> | null,
 ): string {
   if (!category) return "blue";
-  if (category.slug && CAT_BADGE[category.slug]) return CAT_BADGE[category.slug];
-  if (category.name && CAT_BADGE_BY_NAME[category.name]) return CAT_BADGE_BY_NAME[category.name];
+  if (category.slug && CAT_BADGE[category.slug])
+    return CAT_BADGE[category.slug];
+  if (category.name && CAT_BADGE_BY_NAME[category.name])
+    return CAT_BADGE_BY_NAME[category.name];
   return "blue";
 }
 
@@ -195,14 +213,17 @@ const CATEGORY_FALLBACK = {
   text: "text-slate-600 dark:text-slate-400",
   border: "border-slate-100 dark:border-slate-700",
 };
-export function categoryVisual(category?: Pick<Category, "slug" | "icon"> | null): {
+export function categoryVisual(
+  category?: Pick<Category, "slug" | "icon"> | null,
+): {
   Icon: React.ElementType;
   bg: string;
   text: string;
   border: string;
 } {
   const Icon = (category?.icon && CATEGORY_ICONS[category.icon]) || LayoutGrid;
-  const visual = (category?.slug && CATEGORY_VISUALS[category.slug]) || CATEGORY_FALLBACK;
+  const visual =
+    (category?.slug && CATEGORY_VISUALS[category.slug]) || CATEGORY_FALLBACK;
   return { Icon, ...visual };
 }
 
@@ -217,9 +238,15 @@ export function ProgressBar({
   className?: string;
 }) {
   const pct = Math.min(100, Math.round((value / Math.max(1, max)) * 100));
-  const bar = pct >= 95 ? "bg-red-500" : pct >= 75 ? "bg-amber-500" : "bg-emerald-500";
+  const bar =
+    pct >= 95 ? "bg-red-500" : pct >= 75 ? "bg-amber-500" : "bg-emerald-500";
   return (
-    <div className={cn("w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1.5", className)}>
+    <div
+      className={cn(
+        "w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1.5",
+        className,
+      )}
+    >
       <motion.div
         className={cn("h-1.5 rounded-full", bar)}
         initial={{ width: 0 }}
@@ -246,8 +273,10 @@ export function StatCard({
 }) {
   const cm: Record<string, string> = {
     blue: "bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400",
-    green: "bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400",
-    purple: "bg-purple-50 dark:bg-purple-950 text-purple-600 dark:text-purple-400",
+    green:
+      "bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400",
+    purple:
+      "bg-purple-50 dark:bg-purple-950 text-purple-600 dark:text-purple-400",
     amber: "bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400",
   };
   return (
@@ -269,8 +298,12 @@ export function StatCard({
           </span>
         )}
       </div>
-      <p className="text-2xl font-bold text-slate-900 dark:text-white">{value}</p>
-      <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{label}</p>
+      <p className="text-2xl font-bold text-slate-900 dark:text-white">
+        {value}
+      </p>
+      <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+        {label}
+      </p>
     </div>
   );
 }
@@ -326,6 +359,18 @@ export function EventCard({
         <h3 className="font-bold text-slate-900 dark:text-white text-sm leading-snug line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
           {event.title}
         </h3>
+        <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
+          {event.priceCents > 0
+            ? `৳${(event.priceCents / 100).toFixed(2)}`
+            : "Free entry"}
+        </p>
+        {isUpcoming(event.startsAt) && (
+          <p className="mt-2 inline-flex rounded-full bg-blue-50 dark:bg-blue-950 px-2.5 py-1 text-xs font-bold text-blue-700 dark:text-blue-300">
+            {remainingDays(event.startsAt) === 0
+              ? "Today"
+              : `${remainingDays(event.startsAt)} ${remainingDays(event.startsAt) === 1 ? "day" : "days"} remaining`}
+          </p>
+        )}
         <div className="mt-2.5 space-y-1.5">
           <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
             <Calendar className="w-3.5 h-3.5 text-blue-500" />
@@ -348,7 +393,11 @@ export function EventCard({
             <span
               className={cn(
                 "font-semibold",
-                isSoldOut ? "text-red-600" : isAlmostFull ? "text-amber-600" : "text-emerald-600",
+                isSoldOut
+                  ? "text-red-600"
+                  : isAlmostFull
+                    ? "text-amber-600"
+                    : "text-emerald-600",
               )}
             >
               {isSoldOut ? "Sold Out" : `${remaining} left`}
@@ -400,7 +449,10 @@ export function QRCodeView({
     return (
       <div
         style={{ width: size, height: size }}
-        className={cn("rounded-lg bg-slate-100 dark:bg-slate-700 animate-pulse", className)}
+        className={cn(
+          "rounded-lg bg-slate-100 dark:bg-slate-700 animate-pulse",
+          className,
+        )}
       />
     );
   }
@@ -421,9 +473,15 @@ export function Confetti() {
     id: i,
     x: Math.random() * 100,
     delay: Math.random() * 1.5,
-    color: ["#2563EB", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#06B6D4"][
-      Math.floor(Math.random() * 7)
-    ],
+    color: [
+      "#2563EB",
+      "#10B981",
+      "#F59E0B",
+      "#EF4444",
+      "#8B5CF6",
+      "#EC4899",
+      "#06B6D4",
+    ][Math.floor(Math.random() * 7)],
     size: Math.random() * 9 + 5,
     round: Math.random() > 0.4,
   }));
@@ -469,7 +527,9 @@ export function CountdownTimer({ targetDate }: { targetDate: string }) {
   }, [targetDate]);
   const Unit = ({ v, l }: { v: number; l: string }) => (
     <div className="flex flex-col items-center bg-slate-900 dark:bg-slate-950 rounded-xl px-3 py-2 min-w-[52px]">
-      <span className="text-xl font-bold text-white font-mono">{String(v).padStart(2, "0")}</span>
+      <span className="text-xl font-bold text-white font-mono">
+        {String(v).padStart(2, "0")}
+      </span>
       <span className="text-xs text-slate-400 mt-0.5">{l}</span>
     </div>
   );
@@ -487,7 +547,13 @@ export function CountdownTimer({ targetDate }: { targetDate: string }) {
 }
 
 // ─── AnimatedCounter ──────────────────────────────────────────────────────────
-export function AnimatedCounter({ target, suffix = "" }: { target: number; suffix?: string }) {
+export function AnimatedCounter({
+  target,
+  suffix = "",
+}: {
+  target: number;
+  suffix?: string;
+}) {
   const [val, setVal] = useState(0);
   useEffect(() => {
     let start = 0;
@@ -510,9 +576,20 @@ export function AnimatedCounter({ target, suffix = "" }: { target: number; suffi
 }
 
 // ─── Fetch-state helpers (shared across data screens) ─────────────────────────
-export function Loading({ label = "Loading…", className = "" }: { label?: string; className?: string }) {
+export function Loading({
+  label = "Loading…",
+  className = "",
+}: {
+  label?: string;
+  className?: string;
+}) {
   return (
-    <div className={cn("flex flex-col items-center justify-center py-20 text-slate-400", className)}>
+    <div
+      className={cn(
+        "flex flex-col items-center justify-center py-20 text-slate-400",
+        className,
+      )}
+    >
       <Loader2 className="w-7 h-7 animate-spin text-blue-500 mb-3" />
       <p className="text-sm font-medium">{label}</p>
     </div>
@@ -529,11 +606,18 @@ export function ErrorState({
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-col items-center justify-center py-20 text-center", className)}>
+    <div
+      className={cn(
+        "flex flex-col items-center justify-center py-20 text-center",
+        className,
+      )}
+    >
       <div className="w-14 h-14 rounded-2xl bg-red-50 dark:bg-red-950 flex items-center justify-center mb-4">
         <AlertCircle className="w-7 h-7 text-red-500" />
       </div>
-      <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">{message}</p>
+      <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+        {message}
+      </p>
       {onRetry && (
         <Btn variant="outline" size="sm" onClick={onRetry} className="mt-4">
           <RefreshCw className="w-4 h-4" /> Try again
@@ -555,9 +639,16 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-col items-center justify-center py-16 text-center", className)}>
+    <div
+      className={cn(
+        "flex flex-col items-center justify-center py-16 text-center",
+        className,
+      )}
+    >
       <Icon className="w-12 h-12 text-slate-200 dark:text-slate-700 mb-3" />
-      <p className="font-semibold text-slate-500 dark:text-slate-400">{title}</p>
+      <p className="font-semibold text-slate-500 dark:text-slate-400">
+        {title}
+      </p>
       {subtitle && <p className="text-sm text-slate-400 mt-1">{subtitle}</p>}
     </div>
   );
@@ -571,6 +662,8 @@ export function InputField({
   icon: Icon,
   value,
   onChange,
+  min,
+  step,
   extra,
 }: {
   label: string;
@@ -579,6 +672,8 @@ export function InputField({
   icon?: React.ElementType;
   value?: string;
   onChange?: (v: string) => void;
+  min?: string;
+  step?: string;
   extra?: React.ReactNode;
 }) {
   const [show, setShow] = useState(false);
@@ -586,18 +681,27 @@ export function InputField({
   return (
     <div>
       <div className="flex items-center justify-between mb-1.5">
-        <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">{label}</label>
+        <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+          {label}
+        </label>
         {extra}
       </div>
       <div className="relative">
-        {Icon && <Icon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />}
+        {Icon && (
+          <Icon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        )}
         <input
           type={isPassword ? (show ? "text" : "password") : type}
           placeholder={placeholder}
           value={value}
+          min={min}
+          step={step}
           onChange={(e) => onChange?.(e.target.value)}
           className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-          style={{ paddingLeft: Icon ? "2.5rem" : "1rem", paddingRight: isPassword ? "2.5rem" : "1rem" }}
+          style={{
+            paddingLeft: Icon ? "2.5rem" : "1rem",
+            paddingRight: isPassword ? "2.5rem" : "1rem",
+          }}
         />
         {isPassword && (
           <button
@@ -605,7 +709,11 @@ export function InputField({
             onClick={() => setShow(!show)}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
           >
-            {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            {show ? (
+              <EyeOff className="w-4 h-4" />
+            ) : (
+              <Eye className="w-4 h-4" />
+            )}
           </button>
         )}
       </div>
@@ -614,7 +722,13 @@ export function InputField({
 }
 
 // ─── BackBtn ──────────────────────────────────────────────────────────────────
-export function BackBtn({ onClick, label = "Back" }: { onClick: () => void; label?: string }) {
+export function BackBtn({
+  onClick,
+  label = "Back",
+}: {
+  onClick: () => void;
+  label?: string;
+}) {
   return (
     <button
       onClick={onClick}

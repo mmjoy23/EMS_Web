@@ -34,7 +34,6 @@ export function serializeUser(user: UserLike) {
     id: user.id,
     name: user.name,
     email: user.email,
-    studentId: user.studentId ?? null,
     role: user.role,
     department: user.department ?? null,
     studentId: user.studentId ?? null,
@@ -87,10 +86,16 @@ type EventLike = {
   startsAt: Date;
   endsAt: Date;
   seatLimit: number;
+  priceCents?: number;
   registrationDeadline: Date | null;
   coverImage: string | null;
   featured: boolean;
   status: string;
+  approvalStatus?: string;
+  reviewedById?: string | null;
+  reviewedAt?: Date | null;
+  rejectionReason?: string | null;
+  allowCancellation?: boolean;
   tags: string | null;
   agenda: string | null;
   speakers: string | null;
@@ -117,6 +122,7 @@ export function serializeEvent(event: EventLike, counts?: EventCounts) {
       ? event.registrationDeadline.toISOString()
       : null,
     seatLimit: event.seatLimit,
+    priceCents: event.priceCents ?? 0,
     registeredCount,
     remaining,
     checkedInCount,
@@ -124,6 +130,11 @@ export function serializeEvent(event: EventLike, counts?: EventCounts) {
     coverImage: event.coverImage ?? null,
     featured: event.featured,
     status: event.status,
+    approvalStatus: event.approvalStatus ?? "accepted",
+    reviewedById: event.reviewedById ?? null,
+    reviewedAt: event.reviewedAt ? event.reviewedAt.toISOString() : null,
+    rejectionReason: event.rejectionReason ?? null,
+    allowCancellation: event.allowCancellation ?? false,
     tags: parseJson<string[]>(event.tags, []),
     agenda: parseJson<AgendaItem[]>(event.agenda, []),
     speakers: parseJson<Speaker[]>(event.speakers, []),

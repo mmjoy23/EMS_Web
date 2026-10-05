@@ -35,7 +35,10 @@ export function formatTime(iso: string | Date): string {
 }
 
 /** "9:00 AM – 1:00 PM" (same day) or "Mar 15, 9:00 AM – Mar 17, 6:00 PM". */
-export function formatTimeRange(startIso: string | Date, endIso: string | Date): string {
+export function formatTimeRange(
+  startIso: string | Date,
+  endIso: string | Date,
+): string {
   const start = parseDate(startIso);
   const end = parseDate(endIso);
   const sameDay = start.toDateString() === end.toDateString();
@@ -44,12 +47,16 @@ export function formatTimeRange(startIso: string | Date, endIso: string | Date):
 }
 
 /** "Mar 15, 2026" or "Mar 15 – 17, 2026" across multiple days. */
-export function formatDateRange(startIso: string | Date, endIso: string | Date): string {
+export function formatDateRange(
+  startIso: string | Date,
+  endIso: string | Date,
+): string {
   const start = parseDate(startIso);
   const end = parseDate(endIso);
   if (start.toDateString() === end.toDateString()) return formatDate(start);
   const sameMonth =
-    start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
+    start.getMonth() === end.getMonth() &&
+    start.getFullYear() === end.getFullYear();
   if (sameMonth) {
     const month = start.toLocaleDateString("en-US", { month: "short" });
     return `${month} ${start.getDate()} – ${end.getDate()}, ${start.getFullYear()}`;
@@ -58,7 +65,9 @@ export function formatDateRange(startIso: string | Date, endIso: string | Date):
 }
 
 export function monthShort(iso: string | Date): string {
-  return parseDate(iso).toLocaleDateString("en-US", { month: "short" }).toUpperCase();
+  return parseDate(iso)
+    .toLocaleDateString("en-US", { month: "short" })
+    .toUpperCase();
 }
 
 export function dayOfMonth(iso: string | Date): number {
@@ -66,7 +75,10 @@ export function dayOfMonth(iso: string | Date): number {
 }
 
 export function monthYear(iso: string | Date): string {
-  return parseDate(iso).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  return parseDate(iso).toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
 }
 
 const DAY = 86_400_000;
@@ -83,6 +95,10 @@ export function relativeDay(iso: string | Date): string {
   if (days === -1) return "Yesterday";
   if (days > 1) return `In ${days} days`;
   return `${Math.abs(days)} days ago`;
+}
+
+export function remainingDays(iso: string | Date): number {
+  return Math.max(0, Math.ceil((parseDate(iso).getTime() - Date.now()) / DAY));
 }
 
 export function isPast(iso: string | Date): boolean {

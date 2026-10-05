@@ -1,6 +1,10 @@
 import { Router } from "express";
 import { prisma } from "../db.js";
-import { requireAuth, requireRole, userManagesEvent } from "../auth/middleware.js";
+import {
+  requireAuth,
+  requireRole,
+  userManagesEvent,
+} from "../auth/middleware.js";
 import { REGISTRATION_STATUS, ROLES } from "../lib/constants.js";
 import { asyncHandler, forbidden } from "../lib/http.js";
 import { getEventCounts } from "../lib/seats.js";
@@ -19,7 +23,7 @@ const router = Router();
 router.post(
   "/",
   requireAuth,
-  requireRole(ROLES.ORGANIZER, ROLES.ADMIN),
+  requireRole(ROLES.ORGANIZER),
   asyncHandler(async (req, res) => {
     const { code, eventId } = parseBody(checkinSchema, req.body);
 
@@ -33,7 +37,11 @@ router.post(
     }
 
     // The scanner must manage the event this ticket belongs to.
-    const canManage = await userManagesEvent(req.user!.id, req.user!.role, reg.eventId);
+    const canManage = await userManagesEvent(
+      req.user!.id,
+      req.user!.role,
+      reg.eventId,
+    );
     if (!canManage) throw forbidden("You don't manage this event");
 
     const eventSummary = {
@@ -79,10 +87,22 @@ router.post(
     }
 
     const now = new Date();
-    await prisma.registration.update({
-      where: { id: reg.id },
-      data: { checkedInAt: now },
+    const updated = await prisma.registration.updateMany({
+      where: {
+        id: reg.id,
+        status: REGISTRATION_STATUS.REGISTERED,
+        checkedInAt: null,
+      },
+      data: { checkedInAt: now, checkedInById: req.user!.id },
     });
+    if (updated.count === 0) {
+      return res.json({
+        result: "already_checked_in",
+        message: "Already checked in",
+        attendee,
+        counts: await getEventCounts(reg.eventId),
+      });
+    }
     const counts = await getEventCounts(reg.eventId);
 
     return res.json({

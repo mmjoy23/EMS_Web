@@ -7,13 +7,17 @@
 
 import type {
   AttendanceReport,
+  CancellationPreview,
   Category,
   CheckinResponse,
+  ComplaintEntry,
+  ComplaintSummary,
   EmailMessage,
   EventDetail,
   EventDTO,
   FeedbackEntry,
   FeedbackSummary,
+  FineEntry,
   Participant,
   Person,
   Registration,
@@ -99,6 +103,7 @@ export interface EventInput {
   startsAt: string;
   endsAt: string;
   seatLimit: number;
+  priceCents?: number;
   registrationDeadline?: string | null;
   coverImage?: string | null;
   featured?: boolean;
@@ -147,6 +152,8 @@ export const api = {
       patch<{ event: EventDTO }>(`/events/${id}`, input),
     cancel: (id: string, reason?: string) =>
       post<{ ok: true; notified: number }>(`/events/${id}/cancel`, { reason }),
+    resubmit: (id: string) =>
+      post<{ event: EventDTO }>(`/events/${id}/resubmit`),
     duplicate: (id: string) =>
       post<{ event: EventDTO }>(`/events/${id}/duplicate`),
     participants: (id: string) =>
@@ -169,6 +176,14 @@ export const api = {
       post<{ registration: Registration }>("/registrations", { eventId }),
     remove: (eventId: string) =>
       del<{ registration: Registration }>(`/registrations/${eventId}`),
+    cancellationPreview: (eventId: string) =>
+      get<CancellationPreview>(
+        `/registrations/${eventId}/cancellation-preview`,
+      ),
+    cancel: (eventId: string) =>
+      post<{ registration: Registration; cancellation: CancellationPreview }>(
+        `/registrations/${eventId}/cancel`,
+      ),
     mine: () => get<{ registrations: Registration[] }>("/registrations/me"),
     ticket: (eventId: string) =>
       get<{ ticket: Ticket }>(`/registrations/${eventId}/ticket`),
@@ -179,6 +194,65 @@ export const api = {
 
   categories: {
     list: () => get<{ categories: Category[] }>("/categories"),
+  },
+
+  admin: {
+    eventRequests: (status = "all") =>
+      get<{ requests: EventDTO[] }>("/admin/event-requests", { status }),
+    decideEventRequest: (
+      id: string,
+      decision: "accepted" | "rejected",
+      reason?: string,
+    ) =>
+      post<{ event: EventDTO }>(`/admin/event-requests/${id}/decision`, {
+        decision,
+        reason,
+      }),
+    complaints: (status = "all") =>
+      get<{ complaints: ComplaintEntry[] }>("/admin/complaints", { status }),
+    managedComplaints: () =>
+      get<{ complaints: ComplaintEntry[] }>("/admin/complaints/managed"),
+    updateComplaint: (
+      id: string,
+      status: ComplaintEntry["status"],
+      adminNote?: string,
+    ) =>
+      patch<{ complaint: ComplaintEntry }>(`/admin/complaints/${id}`, {
+        status,
+        adminNote,
+      }),
+    createFine: (complaintId: string, amount: number, reason: string) =>
+      post<{ fine: FineEntry }>("/admin/fines", {
+        complaintId,
+        amount,
+        reason,
+      }),
+    fines: () => get<{ fines: FineEntry[] }>("/admin/fines"),
+    updateFine: (id: string, status: FineEntry["status"]) =>
+      patch<{ fine: FineEntry }>(`/admin/fines/${id}`, { status }),
+  },
+
+  complaints: {
+    create: (
+      category: string,
+      eventId: string,
+      subject: string,
+      description: string,
+      evidencePath?: string,
+    ) =>
+      post<{ complaint: ComplaintEntry }>("/admin/complaints", {
+        eventId,
+        category,
+        subject,
+        description,
+        evidencePath,
+      }),
+    mine: () =>
+      get<{ complaints: ComplaintEntry[]; summary: ComplaintSummary }>(
+        "/admin/complaints/mine",
+      ),
+    get: (id: string) =>
+      get<{ complaint: ComplaintEntry }>(`/admin/complaints/${id}`),
   },
 
   feedback: {

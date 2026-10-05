@@ -7,12 +7,21 @@ import { asyncHandler, badRequest, conflict, notFound } from "../lib/http.js";
 import { assertOpenForRegistration, computeEventCounts } from "../lib/seats.js";
 import { serializeEvent, serializeRegistration } from "../lib/serialize.js";
 import { sendConfirmationEmail, toEventEmailData } from "../mail/mailer.js";
+import {
+  calculateCancellation,
+  cancellationRefundStatus,
+} from "../lib/cancellation.js";
 
 const router = Router();
 
-const newTicketCode = () => `UEV-${randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase()}`;
+const newTicketCode = () =>
+  `UEV-${randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase()}`;
 
-const eventInclude = { category: true, host: true, coHosts: { include: { user: true } } } as const;
+const eventInclude = {
+  category: true,
+  host: true,
+  coHosts: { include: { user: true } },
+} as const;
 
 // ---------------------------------------------------------------------------
 // POST /api/registrations — register the current user for an event
@@ -21,7 +30,8 @@ router.post(
   "/",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const eventId = typeof req.body?.eventId === "string" ? req.body.eventId : "";
+    const eventId =
+      typeof req.body?.eventId === "string" ? req.body.eventId : "";
     if (!eventId) throw badRequest("eventId is required");
     const userId = req.user!.id;
 
@@ -64,6 +74,7 @@ router.post(
             seatNumber,
             checkedInAt: null,
             ticketCode: existing.ticketCode || newTicketCode(),
+            paymentStatus: event.priceCents > 0 ? "pending" : "succeeded",
           },
         });
       }
@@ -74,6 +85,7 @@ router.post(
           status: REGISTRATION_STATUS.REGISTERED,
           ticketCode: newTicketCode(),
           seatNumber,
+          paymentStatus: event.priceCents > 0 ? "pending" : "succeeded",
         },
       });
     });
@@ -99,25 +111,114 @@ router.post(
 );
 
 // ---------------------------------------------------------------------------
-// DELETE /api/registrations/:eventId — unregister (frees the seat)
+// GET /api/registrations/:eventId/cancellation-preview — preview only
+// ---------------------------------------------------------------------------
+router.get(
+  "/:eventId/cancellation-preview",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const registration = await prisma.registration.findUnique({
+      where: {
+        eventId_userId: { eventId: req.params.eventId, userId: req.user!.id },
+      },
+      include: { event: true },
+    });
+    if (!registration || registration.status !== REGISTRATION_STATUS.REGISTERED)
+      throw conflict("You're not registered for this event");
+    if (
+      registration.paidAmountCents > 0 &&
+      !registration.event.allowCancellation
+    )
+      throw conflict("Cancellation is not allowed for this event");
+    const calculation = calculateCancellation(
+      registration.event.startsAt,
+      registration.paidAmountCents,
+      registration.paymentStatus,
+    );
+    res.json({
+      event: {
+        id: registration.event.id,
+        title: registration.event.title,
+        startsAt: registration.event.startsAt.toISOString(),
+      },
+      paidAmountCents: registration.paidAmountCents,
+      paymentStatus: registration.paymentStatus,
+      ...calculation,
+      refundStatus: cancellationRefundStatus(
+        registration.paidAmountCents,
+        registration.paymentStatus,
+        calculation.refundAmountCents,
+      ),
+    });
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// POST /api/registrations/:eventId/cancel — confirm cancellation
+// ---------------------------------------------------------------------------
+router.post(
+  "/:eventId/cancel",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const registration = await prisma.registration.findUnique({
+      where: {
+        eventId_userId: { eventId: req.params.eventId, userId: req.user!.id },
+      },
+      include: { event: true, cancellation: true },
+    });
+    if (!registration || registration.status !== REGISTRATION_STATUS.REGISTERED)
+      throw conflict("You're not registered for this event");
+    if (
+      registration.paidAmountCents > 0 &&
+      !registration.event.allowCancellation
+    )
+      throw conflict("Cancellation is not allowed for this event");
+    if (registration.cancellation)
+      throw conflict("This registration has already been cancelled");
+    const calculation = calculateCancellation(
+      registration.event.startsAt,
+      registration.paidAmountCents,
+      registration.paymentStatus,
+    );
+    const refundStatus = cancellationRefundStatus(
+      registration.paidAmountCents,
+      registration.paymentStatus,
+      calculation.refundAmountCents,
+    );
+    const result = await prisma.$transaction(async (tx) => {
+      const updated = await tx.registration.updateMany({
+        where: { id: registration.id, status: REGISTRATION_STATUS.REGISTERED },
+        data: { status: REGISTRATION_STATUS.CANCELLED, checkedInAt: null },
+      });
+      if (updated.count !== 1)
+        throw conflict("Registration is no longer active");
+      await tx.cancellation.create({
+        data: {
+          registrationId: registration.id,
+          originalPaidAmountCents: registration.paidAmountCents,
+          penaltyPercentage: calculation.penaltyPercentage,
+          penaltyAmountCents: calculation.penaltyAmountCents,
+          refundAmountCents: calculation.refundAmountCents,
+          refundStatus,
+        },
+      });
+      return tx.registration.findUnique({ where: { id: registration.id } });
+    });
+    res.json({
+      registration: serializeRegistration(result!),
+      cancellation: { ...calculation, refundStatus },
+    });
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// DELETE /api/registrations/:eventId — legacy immediate cancellation disabled
 // ---------------------------------------------------------------------------
 router.delete(
   "/:eventId",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const { eventId } = req.params;
-    const userId = req.user!.id;
-    const existing = await prisma.registration.findUnique({
-      where: { eventId_userId: { eventId, userId } },
-    });
-    if (!existing || existing.status !== REGISTRATION_STATUS.REGISTERED) {
-      throw conflict("You're not registered for this event");
-    }
-    const updated = await prisma.registration.update({
-      where: { id: existing.id },
-      data: { status: REGISTRATION_STATUS.CANCELLED, checkedInAt: null },
-    });
-    res.json({ registration: serializeRegistration(updated) });
+    throw conflict("Cancellation requires a preview and confirmation");
   }),
 );
 
@@ -135,7 +236,9 @@ router.get(
     });
     const counts = await computeEventCounts(rows.map((r) => r.eventId));
     const registrations = rows.map((r) =>
-      serializeRegistration(r, { event: serializeEvent(r.event, counts.get(r.eventId)) }),
+      serializeRegistration(r, {
+        event: serializeEvent(r.event, counts.get(r.eventId)),
+      }),
     );
     res.json({ registrations });
   }),

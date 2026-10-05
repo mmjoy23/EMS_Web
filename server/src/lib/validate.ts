@@ -27,6 +27,13 @@ export const createEventSchema = z.object({
   startsAt: isoDate,
   endsAt: isoDate,
   seatLimit: z.coerce.number().int().min(1).max(100000),
+  priceCents: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(100000000)
+    .optional()
+    .default(0),
   registrationDeadline: isoDate.optional().nullable(),
   coverImage: z.string().trim().url().optional().nullable(),
   featured: z.boolean().optional().default(false),

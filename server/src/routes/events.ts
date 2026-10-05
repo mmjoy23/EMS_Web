@@ -7,7 +7,12 @@ import {
   requireRole,
   userManagesEvent,
 } from "../auth/middleware.js";
-import { EVENT_STATUS, REGISTRATION_STATUS, ROLES } from "../lib/constants.js";
+import {
+  EVENT_APPROVAL_STATUS,
+  EVENT_STATUS,
+  REGISTRATION_STATUS,
+  ROLES,
+} from "../lib/constants.js";
 import {
   asyncHandler,
   badRequest,
@@ -109,6 +114,7 @@ router.get(
       ];
     } else {
       where.status = EVENT_STATUS.PUBLISHED;
+      where.approvalStatus = EVENT_APPROVAL_STATUS.ACCEPTED;
     }
 
     if (q) {
@@ -157,6 +163,7 @@ router.get(
     const rows = await prisma.event.findMany({
       where: {
         status: EVENT_STATUS.PUBLISHED,
+        approvalStatus: EVENT_APPROVAL_STATUS.ACCEPTED,
         featured: true,
         endsAt: { gte: now },
       },
@@ -185,6 +192,17 @@ router.get(
     });
     if (!event) throw notFound("Event not found");
 
+    const canViewUnpublished = req.user
+      ? await userManagesEvent(req.user.id, req.user.role, event.id)
+      : false;
+    if (
+      !canViewUnpublished &&
+      (event.status !== EVENT_STATUS.PUBLISHED ||
+        event.approvalStatus !== EVENT_APPROVAL_STATUS.ACCEPTED)
+    ) {
+      throw notFound("Event not found");
+    }
+
     const counts = await getEventCounts(event.id);
     const serialized = serializeEvent(event, counts);
 
@@ -210,12 +228,12 @@ router.get(
 );
 
 // ---------------------------------------------------------------------------
-// POST /api/events — create (organizer or admin becomes the host)
+// POST /api/events — organizer submits an event request for admin review.
 // ---------------------------------------------------------------------------
 router.post(
   "/",
   requireAuth,
-  requireRole(ROLES.ORGANIZER, ROLES.ADMIN),
+  requireRole(ROLES.ORGANIZER),
   asyncHandler(async (req, res) => {
     const data = parseBody(createEventSchema, req.body);
     if (data.endsAt <= data.startsAt)
@@ -238,10 +256,12 @@ router.post(
         startsAt: data.startsAt,
         endsAt: data.endsAt,
         seatLimit: data.seatLimit,
+        priceCents: data.priceCents,
         registrationDeadline: data.registrationDeadline ?? null,
         coverImage: data.coverImage ?? null,
         featured: data.featured ?? false,
-        status: data.status ?? EVENT_STATUS.PUBLISHED,
+        status: EVENT_STATUS.DRAFT,
+        approvalStatus: EVENT_APPROVAL_STATUS.PENDING,
         tags: JSON.stringify(data.tags ?? []),
         agenda: JSON.stringify(data.agenda ?? []),
         speakers: JSON.stringify(data.speakers ?? []),
@@ -283,6 +303,7 @@ router.patch(
     if (data.startsAt !== undefined) patch.startsAt = data.startsAt;
     if (data.endsAt !== undefined) patch.endsAt = data.endsAt;
     if (data.seatLimit !== undefined) patch.seatLimit = data.seatLimit;
+    if (data.priceCents !== undefined) patch.priceCents = data.priceCents;
     if (data.registrationDeadline !== undefined)
       patch.registrationDeadline = data.registrationDeadline ?? null;
     if (data.coverImage !== undefined)
@@ -308,6 +329,28 @@ router.patch(
     });
     const counts = await getEventCounts(id);
     res.json({ event: serializeEvent(event, counts) });
+  }),
+);
+
+// Organizer resubmission after a rejection. Editing the event itself does not
+// silently publish it; the request must go through admin review again.
+router.post(
+  "/:id/resubmit",
+  requireAuth,
+  requireEventManager("id"),
+  asyncHandler(async (req, res) => {
+    const event = await prisma.event.update({
+      where: { id: req.params.id },
+      data: {
+        approvalStatus: EVENT_APPROVAL_STATUS.PENDING,
+        status: EVENT_STATUS.DRAFT,
+        reviewedById: null,
+        reviewedAt: null,
+        rejectionReason: null,
+      },
+      include: fullInclude,
+    });
+    res.json({ event: serializeEvent(event, await getEventCounts(event.id)) });
   }),
 );
 
@@ -369,6 +412,7 @@ router.post(
         startsAt: source.startsAt,
         endsAt: source.endsAt,
         seatLimit: source.seatLimit,
+        priceCents: source.priceCents,
         registrationDeadline: source.registrationDeadline,
         coverImage: source.coverImage,
         featured: false,

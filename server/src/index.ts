@@ -20,6 +20,7 @@ import outboxRoutes from "./routes/outbox.js";
 import statsRoutes from "./routes/stats.js";
 import userRoutes from "./routes/users.js";
 import jobRoutes from "./routes/jobs.js";
+import adminRoutes from "./routes/admin.js";
 
 const app = express();
 
@@ -45,6 +46,7 @@ app.use("/api/outbox", outboxRoutes);
 app.use("/api/stats", statsRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/jobs", jobRoutes);
+app.use("/api/admin", adminRoutes);
 
 // Unknown API route.
 app.use("/api", (_req, res) => {

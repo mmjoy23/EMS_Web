@@ -66,6 +66,7 @@ import {
   Upload,
   Tag,
   RefreshCw,
+  Gavel,
 } from "lucide-react";
 import {
   BarChart,
@@ -85,6 +86,14 @@ import {
 import { Landing } from "@/screens/Landing";
 import { EventDetails as DatabaseEventDetails } from "@/screens/EventDetails";
 import { Participants as DatabaseParticipants } from "@/screens/Participants";
+import { AdminOperations } from "@/screens/AdminOperations";
+import { OrganizerQrAttendance } from "@/screens/OrganizerQrAttendance";
+import { Issues } from "@/screens/Issues";
+import {
+  ParticipantFeedback,
+  ParticipantNotifications,
+  ParticipantQrPass,
+} from "@/screens/ParticipantLiveScreens";
 import { api } from "@/lib/api";
 import type {
   AdminStats,
@@ -118,7 +127,10 @@ type Screen =
   | "participants"
   | "admin-dashboard"
   | "qr-scanner"
-  | "attendance-report";
+  | "attendance-report"
+  | "admin-operations"
+  | "organizer-qr"
+  | "issues";
 
 type Role = "student" | "organizer" | "admin";
 
@@ -743,6 +755,7 @@ const studentNav = [
   { icon: Bell, label: "Notifications", screen: "notifications", badge: 2 },
   { icon: QrCode, label: "My QR Pass", screen: "registration-success" },
   { icon: Star, label: "Feedback", screen: "feedback" },
+  { icon: AlertTriangle, label: "Complaints", screen: "issues" },
   { icon: User, label: "Profile", screen: "profile" },
 ];
 const organizerNav = [
@@ -750,16 +763,14 @@ const organizerNav = [
   { icon: Plus, label: "Create Event", screen: "create-event" },
   { icon: FileText, label: "Manage Events", screen: "manage-events" },
   { icon: Users, label: "Participants", screen: "participants" },
+  { icon: Scan, label: "QR Attendance", screen: "organizer-qr" },
   { icon: BarChart2, label: "Reports", screen: "attendance-report" },
   { icon: User, label: "Profile", screen: "profile" },
 ];
 const adminNav = [
-  { icon: LayoutDashboard, label: "Dashboard", screen: "admin-dashboard" },
-  { icon: Scan, label: "QR Scanner", screen: "qr-scanner" },
-  { icon: BarChart2, label: "Reports", screen: "attendance-report" },
-  { icon: Users, label: "Participants", screen: "participants" },
-  { icon: FileText, label: "Events", screen: "manage-events" },
-  { icon: Settings, label: "Settings", screen: "profile" },
+  { icon: FileText, label: "Event Requests", screen: "admin-operations" },
+  { icon: AlertTriangle, label: "Complaints", screen: "admin-operations" },
+  { icon: Gavel, label: "Fines", screen: "admin-operations" },
 ];
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
@@ -957,6 +968,9 @@ function TopNav({
     "admin-dashboard": "Dashboard",
     "qr-scanner": "QR Scanner",
     "attendance-report": "Attendance Report",
+    "admin-operations": "Admin Operations",
+    "organizer-qr": "QR Attendance",
+    issues: "Complaints & Fines",
   };
   return (
     <header className="sticky top-0 z-20 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
@@ -4381,7 +4395,7 @@ function ProfileScreen({
               ? "student-dashboard"
               : role === "organizer"
                 ? "organizer-dashboard"
-                : "admin-dashboard",
+                : "admin-operations",
           )
         }
         label="Dashboard"
@@ -5096,6 +5110,7 @@ function CreateEventScreen({ nav }: { nav: (s: Screen) => void }) {
   const [endTime, setEndTime] = useState("17:00");
   const [location, setLocation] = useState("");
   const [seatLimit, setSeatLimit] = useState("200");
+  const [price, setPrice] = useState("0");
   const [registrationDeadline, setRegistrationDeadline] = useState("");
   const [settings, setSettings] = useState([
     ["Enable QR Code Check-in", true],
@@ -5142,10 +5157,11 @@ function CreateEventScreen({ nav }: { nav: (s: Screen) => void }) {
         startsAt: startsAt.toISOString(),
         endsAt: endsAt.toISOString(),
         seatLimit: Number(seatLimit),
+        priceCents: Math.round(Number(price || 0) * 100),
         registrationDeadline: registrationDeadline
           ? new Date(`${registrationDeadline}T23:59`).toISOString()
           : null,
-        status: "published",
+        status: "draft",
         coverImage: coverImage || null,
         qrCheckinEnabled: settings[0][1],
         sendConfirmation: settings[1][1],
@@ -5183,7 +5199,9 @@ function CreateEventScreen({ nav }: { nav: (s: Screen) => void }) {
     }
     if (
       step === 3 &&
-      (!Number.isInteger(Number(seatLimit)) || Number(seatLimit) < 1)
+      (!Number.isInteger(Number(seatLimit)) ||
+        Number(seatLimit) < 1 ||
+        Number(price) < 0)
     ) {
       window.alert("Please enter a valid maximum seat count.");
       return;
@@ -5439,6 +5457,15 @@ function CreateEventScreen({ nav }: { nav: (s: Screen) => void }) {
               value={registrationDeadline}
               onChange={setRegistrationDeadline}
             />
+            <InputField
+              label="Event Price (BDT, 0 = Free)"
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="e.g. 500"
+              value={price}
+              onChange={setPrice}
+            />
           </div>
           <div className="space-y-3 pt-2">
             {settings.map(([label, on], i) => (
@@ -5520,8 +5547,8 @@ function CreateEventScreen({ nav }: { nav: (s: Screen) => void }) {
             <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-950 rounded-xl border border-amber-100 dark:border-amber-900 text-xs">
               <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
               <p className="text-amber-700 dark:text-amber-400">
-                Review all details carefully. Once published, students will be
-                able to register.
+                Your request will be reviewed by an administrator before it is
+                published and opened for registration.
               </p>
             </div>
           </div>
@@ -5555,7 +5582,7 @@ function CreateEventScreen({ nav }: { nav: (s: Screen) => void }) {
             disabled={publishing}
           >
             <CheckCircle className="w-4 h-4" />
-            {publishing ? "Publishing…" : "Publish Event"}
+            {publishing ? "Submitting…" : "Submit for Review"}
           </Btn>
         )}
       </div>
@@ -5570,13 +5597,47 @@ function ManageEventsScreen({
 }) {
   const [tab, setTab] = useState("active");
   const [events, setEvents] = useState<EventDTO[]>([]);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadEvents = () => {
     api.events
-      .list({ when: tab === "past" ? "past" : "upcoming" })
-      .then(({ events: rows }) => setEvents(rows))
+      .list({ mine: true })
+      .then(({ events: rows }) =>
+        setEvents(
+          rows.filter((event) => {
+            if (tab === "draft") return event.approvalStatus !== "accepted";
+            if (tab === "past")
+              return (
+                new Date(event.startsAt) < new Date() ||
+                event.status === "cancelled"
+              );
+            return (
+              new Date(event.startsAt) >= new Date() &&
+              event.status === "published" &&
+              event.approvalStatus === "accepted"
+            );
+          }),
+        ),
+      )
       .catch(() => setEvents([]));
-  }, [tab]);
+  };
+
+  useEffect(loadEvents, [tab]);
+
+  const resubmit = async (id: string) => {
+    setBusyId(id);
+    try {
+      await api.events.resubmit(id);
+      window.alert("Event request resubmitted for review.");
+      loadEvents();
+    } catch (error) {
+      window.alert(
+        error instanceof Error ? error.message : "Could not resubmit event.",
+      );
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const eventRows = events.map((event) => ({
     id: event.id,
@@ -5587,6 +5648,8 @@ function ManageEventsScreen({
     seats: event.seatLimit,
     registered: event.registeredCount,
     banner: event.coverImage ?? "",
+    approvalStatus: event.approvalStatus ?? "accepted",
+    rejectionReason: event.rejectionReason,
   }));
 
   return (
@@ -5669,6 +5732,22 @@ function ManageEventsScreen({
                           >
                             {ev.category}
                           </Badge>
+                          <Badge
+                            color={
+                              ev.approvalStatus === "accepted"
+                                ? "green"
+                                : ev.approvalStatus === "rejected"
+                                  ? "red"
+                                  : "amber"
+                            }
+                          >
+                            {ev.approvalStatus}
+                          </Badge>
+                          {ev.rejectionReason && (
+                            <p className="text-xs text-red-600 mt-1">
+                              {ev.rejectionReason}
+                            </p>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -5690,15 +5769,14 @@ function ManageEventsScreen({
                     <td className="px-4 py-3">
                       <Badge
                         color={
-                          pct >= 95 ? "red" : pct >= 75 ? "amber" : "green"
+                          ev.approvalStatus === "accepted"
+                            ? "green"
+                            : ev.approvalStatus === "rejected"
+                              ? "red"
+                              : "amber"
                         }
-                        dot
                       >
-                        {pct >= 95
-                          ? "Sold Out"
-                          : pct >= 75
-                            ? "Almost Full"
-                            : "Open"}
+                        {ev.approvalStatus}
                       </Badge>
                     </td>
                     <td className="px-4 py-3">
@@ -5714,6 +5792,19 @@ function ManageEventsScreen({
                           title="Duplicate"
                         >
                           <Copy className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() =>
+                            ev.approvalStatus === "rejected" &&
+                            void resubmit(ev.id)
+                          }
+                          disabled={
+                            busyId === ev.id || ev.approvalStatus !== "rejected"
+                          }
+                          className="p-1.5 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950 text-slate-400 hover:text-amber-600 transition-colors disabled:opacity-40"
+                          title="Resubmit rejected request"
+                        >
+                          <RefreshCw className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() =>
@@ -6275,7 +6366,10 @@ function QRScannerScreen({ nav }: { nav: (s: Screen) => void }) {
 
   return (
     <div className="max-w-lg mx-auto space-y-5">
-      <BackBtn onClick={() => nav("admin-dashboard")} label="Admin Console" />
+      <BackBtn
+        onClick={() => nav("admin-operations")}
+        label="Admin Operations"
+      />
       {/* Live counter */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-4 text-center">
@@ -6694,7 +6788,10 @@ function AttendanceReportScreen({
 
   return (
     <div className="space-y-6">
-      <BackBtn onClick={() => nav("admin-dashboard")} label="Admin Console" />
+      <BackBtn
+        onClick={() => nav("admin-operations")}
+        label="Admin Operations"
+      />
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white">
@@ -7349,18 +7446,47 @@ const AUTH_SCREENS: Screen[] = [
 ];
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>("landing");
-  const [params, setParams] = useState<{ eventId?: string; slug?: string }>({});
+  const [screen, setScreen] = useState<Screen>(() => {
+    try {
+      return (
+        (JSON.parse(sessionStorage.getItem("unievents-navigation") || "null")
+          ?.screen as Screen) || "landing"
+      );
+    } catch {
+      return "landing";
+    }
+  });
+  const [params, setParams] = useState<{ eventId?: string; slug?: string }>(
+    () => {
+      try {
+        return (
+          JSON.parse(sessionStorage.getItem("unievents-navigation") || "null")
+            ?.params || {}
+        );
+      } catch {
+        return {};
+      }
+    },
+  );
   const [role, setRole] = useState<Role>("student");
   const [isDark, setIsDark] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [registered, setRegistered] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
 
   const nav = useCallback(
     (s: Screen, nextParams: { eventId?: string; slug?: string } = {}) => {
       setScreen(s);
       setParams(nextParams);
+      if (s === "landing" || AUTH_SCREENS.includes(s)) {
+        sessionStorage.removeItem("unievents-navigation");
+      } else {
+        sessionStorage.setItem(
+          "unievents-navigation",
+          JSON.stringify({ screen: s, params: nextParams }),
+        );
+      }
       window.scrollTo({ top: 0, behavior: "smooth" });
     },
     [],
@@ -7378,7 +7504,7 @@ export default function App() {
               ? "student-dashboard"
               : user.role === "organizer"
                 ? "organizer-dashboard"
-                : "admin-dashboard",
+                : "admin-operations",
           );
         })
         .catch(() => undefined);
@@ -7390,8 +7516,30 @@ export default function App() {
     void api.auth.logout();
     setIsLoggedIn(false);
     setRegistered(false);
+    sessionStorage.removeItem("unievents-navigation");
     nav("landing");
   }, [nav]);
+
+  useEffect(() => {
+    api.auth
+      .me()
+      .then(({ user }) => {
+        if (user) {
+          setRole(user.role);
+          setIsLoggedIn(true);
+        } else if (!AUTH_SCREENS.includes(screen)) {
+          setScreen("landing");
+          setParams({});
+          sessionStorage.removeItem("unievents-navigation");
+        }
+      })
+      .catch(() => {
+        setScreen("landing");
+        setParams({});
+        sessionStorage.removeItem("unievents-navigation");
+      })
+      .finally(() => setAuthReady(true));
+  }, []);
 
   useEffect(() => {
     if (isDark) document.documentElement.classList.add("dark");
@@ -7402,6 +7550,10 @@ export default function App() {
   const isPublic =
     AUTH_SCREENS.includes(screen) ||
     (!isLoggedIn && screen === "event-details");
+
+  if (!authReady) {
+    return <div className="min-h-screen bg-slate-50 dark:bg-slate-900" />;
+  }
 
   const renderScreen = () => {
     switch (screen) {
@@ -7436,13 +7588,13 @@ export default function App() {
           />
         );
       case "registration-success":
-        return <RegistrationSuccessScreen nav={nav} />;
+        return <ParticipantQrPass nav={nav} />;
       case "my-events":
         return <LiveMyEventsScreen nav={nav} />;
       case "event-calendar":
         return <LiveCalendarScreen nav={nav} />;
       case "notifications":
-        return <LiveNotificationsScreen nav={nav} />;
+        return <ParticipantNotifications nav={nav} />;
       case "profile":
         return (
           <ProfileScreen
@@ -7453,9 +7605,18 @@ export default function App() {
           />
         );
       case "feedback":
-        return <FeedbackScreen nav={nav} />;
+        return <ParticipantFeedback nav={nav} />;
       case "organizer-dashboard":
         return <OrganizerDashboard nav={nav} />;
+      case "organizer-qr":
+        return (
+          <OrganizerQrAttendance
+            nav={nav}
+            params={params}
+            isDark={isDark}
+            setIsDark={setIsDark}
+          />
+        );
       case "create-event":
         return <CreateEventScreen nav={nav} />;
       case "manage-events":
@@ -7471,6 +7632,24 @@ export default function App() {
         );
       case "admin-dashboard":
         return <AdminDashboard nav={nav} />;
+      case "admin-operations":
+        return (
+          <AdminOperations
+            nav={nav}
+            params={params}
+            isDark={isDark}
+            setIsDark={setIsDark}
+          />
+        );
+      case "issues":
+        return (
+          <Issues
+            nav={nav}
+            params={params}
+            isDark={isDark}
+            setIsDark={setIsDark}
+          />
+        );
       case "qr-scanner":
         return <QRScannerScreen nav={nav} />;
       case "attendance-report":

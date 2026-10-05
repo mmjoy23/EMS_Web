@@ -18,6 +18,26 @@ export const EVENT_STATUS = {
   PUBLISHED: "published",
   CANCELLED: "cancelled",
 } as const;
+export const EVENT_APPROVAL_STATUS = {
+  PENDING: "pending",
+  ACCEPTED: "accepted",
+  REJECTED: "rejected",
+} as const;
+export type EventApprovalStatus =
+  (typeof EVENT_APPROVAL_STATUS)[keyof typeof EVENT_APPROVAL_STATUS];
+
+export const COMPLAINT_STATUS = {
+  SUBMITTED: "submitted",
+  UNDER_REVIEW: "under_review",
+  RESOLVED: "resolved",
+  DISMISSED: "dismissed",
+} as const;
+
+export const FINE_STATUS = {
+  ISSUED: "issued",
+  PAID: "paid",
+  WAIVED: "waived",
+} as const;
 export type EventStatus = (typeof EVENT_STATUS)[keyof typeof EVENT_STATUS];
 
 export const EMAIL_TYPE = {

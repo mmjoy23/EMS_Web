@@ -22,10 +22,16 @@ model User {
   avatarColor  String? // gradient key for the avatar chip
   createdAt    DateTime @default(now())
 
-  hostedEvents  Event[]        @relation("EventHost")
-  coHostFor     EventCoHost[]
-  registrations Registration[]
-  feedback      Feedback[]
+  hostedEvents           Event[]        @relation("EventHost")
+  coHostFor              EventCoHost[]
+  registrations          Registration[]
+  feedback               Feedback[]
+  reviewedEvents         Event[]        @relation("EventReviewer")
+  reviewedComplaints     Complaint[]    @relation("ComplaintReviewer")
+  complaints             Complaint[]
+  issuedFines            Fine[]         @relation("FineIssuer")
+  receivedFines          Fine[]         @relation("FineRecipient")
+  checkedInRegistrations Registration[] @relation("CheckinOperator")
 }
 
 model Category {
@@ -38,38 +44,46 @@ model Category {
 }
 
 model Event {
-  id                   String   @id @default(cuid())
-  slug                 String   @unique
+  id                   String    @id @default(cuid())
+  slug                 String    @unique
   title                String
   description          String
   location             String
   startsAt             DateTime
   endsAt               DateTime
   seatLimit            Int
+  priceCents          Int       @default(0)
   registrationDeadline DateTime?
   coverImage           String?
-  featured             Boolean  @default(false)
-  status               String   @default("published") // draft | published | cancelled
+  featured             Boolean   @default(false)
+  status               String    @default("published") // draft | published | cancelled
+  approvalStatus       String    @default("pending") // pending | accepted | rejected
+  reviewedById         String?
+  reviewedAt           DateTime?
+  rejectionReason      String?
   tags                 String? // JSON array of strings
   agenda               String? // JSON array of { time, title, speaker }
   speakers             String? // JSON array of { name, role, initials }
-  qrCheckinEnabled     Boolean  @default(true)
-  sendConfirmation     Boolean  @default(true)
-  sendReminder         Boolean  @default(true)
-  allowCancellation    Boolean  @default(false)
-  requireApproval      Boolean  @default(false)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  qrCheckinEnabled     Boolean   @default(true)
+  sendConfirmation     Boolean   @default(true)
+  sendReminder         Boolean   @default(true)
+  allowCancellation    Boolean   @default(false)
+  requireApproval      Boolean   @default(false)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id])
 
-  hostId String
-  host   User   @relation("EventHost", fields: [hostId], references: [id])
+  hostId     String
+  host       User   @relation("EventHost", fields: [hostId], references: [id])
+  reviewedBy User?  @relation("EventReviewer", fields: [reviewedById], references: [id])
 
   coHosts       EventCoHost[]
   registrations Registration[]
   feedback      Feedback[]
+  complaints    Complaint[]
+  fines         Fine[]
 
   @@index([startsAt])
   @@index([categoryId])
@@ -85,21 +99,41 @@ model EventCoHost {
 }
 
 model Registration {
-  id          String    @id @default(cuid())
-  eventId     String
-  userId      String
-  status      String    @default("registered") // registered | cancelled
-  ticketCode  String    @unique
-  seatNumber  Int?
-  checkedInAt DateTime?
-  createdAt   DateTime  @default(now())
+  id            String    @id @default(cuid())
+  eventId       String
+  userId        String
+  status        String    @default("registered") // registered | cancelled
+  ticketCode    String    @unique
+  seatNumber    Int?
+  checkedInAt   DateTime?
+  checkedInById String?
+  paidAmountCents Int @default(0)
+  paymentStatus String @default("succeeded") // succeeded | pending | failed
+  createdAt     DateTime  @default(now())
 
-  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event       Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user        User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checkedInBy User? @relation("CheckinOperator", fields: [checkedInById], references: [id])
+  cancellation Cancellation?
 
   @@unique([eventId, userId])
   @@index([eventId])
   @@index([userId])
+}
+
+model Cancellation {
+  id                    String   @id @default(cuid())
+  registrationId        String   @unique
+  originalPaidAmountCents Int     @default(0)
+  penaltyPercentage     Int
+  penaltyAmountCents    Int       @default(0)
+  refundAmountCents     Int       @default(0)
+  cancelledAt           DateTime @default(now())
+  cancellationStatus    String   @default("confirmed")
+  refundStatus          String   @default("not_required")
+  refundTransactionId   String?
+
+  registration Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
 }
 
 model Feedback {
@@ -114,6 +148,52 @@ model Feedback {
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([eventId, userId])
+  @@index([eventId])
+}
+
+model Complaint {
+  id            String    @id @default(cuid())
+  eventId       String
+  participantId String
+  category      String    @default("other")
+  subject       String
+  description   String
+  evidencePath  String?
+  status        String    @default("submitted") // submitted | under_review | resolved | dismissed
+  adminNote     String?
+  reviewedById  String?
+  reviewedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  event       Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  participant User  @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  reviewedBy  User? @relation("ComplaintReviewer", fields: [reviewedById], references: [id])
+  fine        Fine?
+
+  @@index([eventId])
+  @@index([participantId])
+  @@index([status])
+}
+
+model Fine {
+  id             String   @id @default(cuid())
+  complaintId    String?  @unique
+  eventId        String
+  eventCreatorId String
+  issuedById     String
+  amount         Int
+  reason         String
+  status         String   @default("issued") // issued | paid | waived
+  issuedAt       DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  complaint    Complaint? @relation(fields: [complaintId], references: [id])
+  event        Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventCreator User       @relation("FineRecipient", fields: [eventCreatorId], references: [id])
+  issuedBy     User       @relation("FineIssuer", fields: [issuedById], references: [id])
+
+  @@index([eventCreatorId])
   @@index([eventId])
 }
 

@@ -2,7 +2,14 @@ import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "../src/db.js";
-import { EVENT_STATUS, REGISTRATION_STATUS, ROLES } from "../src/lib/constants.js";
+import {
+  COMPLAINT_STATUS,
+  EVENT_APPROVAL_STATUS,
+  EVENT_STATUS,
+  FINE_STATUS,
+  REGISTRATION_STATUS,
+  ROLES,
+} from "../src/lib/constants.js";
 import { sendConfirmationEmail, toEventEmailData } from "../src/mail/mailer.js";
 import { runFeedbackJob, runReminderJob } from "../src/scheduler.js";
 
@@ -10,15 +17,26 @@ const DEMO_PASSWORD = "password123";
 const now = new Date();
 const hours = (h: number) => new Date(now.getTime() + h * 3600_000);
 const days = (d: number) => new Date(now.getTime() + d * 86_400_000);
-const ticket = () => `UEV-${randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase()}`;
+const ticket = () =>
+  `UEV-${randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase()}`;
 
-const AVATARS = ["indigo", "violet", "fuchsia", "sky", "emerald", "amber", "rose"];
+const AVATARS = [
+  "indigo",
+  "violet",
+  "fuchsia",
+  "sky",
+  "emerald",
+  "amber",
+  "rose",
+];
 
 async function main() {
   console.log("Seeding UniEvents…");
 
   // --- Reset (respect FK order) ------------------------------------------
   await prisma.emailMessage.deleteMany();
+  await prisma.fine.deleteMany();
+  await prisma.complaint.deleteMany();
   await prisma.feedback.deleteMany();
   await prisma.registration.deleteMany();
   await prisma.eventCoHost.deleteMany();
@@ -32,9 +50,19 @@ async function main() {
   const categoryDefs = [
     { name: "Technology", slug: "technology", color: "#2563EB", icon: "Cpu" },
     { name: "Business", slug: "business", color: "#7C3AED", icon: "Briefcase" },
-    { name: "Arts & Culture", slug: "arts-culture", color: "#DB2777", icon: "Palette" },
+    {
+      name: "Arts & Culture",
+      slug: "arts-culture",
+      color: "#DB2777",
+      icon: "Palette",
+    },
     { name: "Career", slug: "career", color: "#059669", icon: "GraduationCap" },
-    { name: "Health & Sports", slug: "health-sports", color: "#EA580C", icon: "Activity" },
+    {
+      name: "Health & Sports",
+      slug: "health-sports",
+      color: "#EA580C",
+      icon: "Activity",
+    },
     { name: "Academic", slug: "academic", color: "#0891B2", icon: "BookOpen" },
   ];
   const categories: Record<string, { id: string; name: string }> = {};
@@ -88,8 +116,70 @@ async function main() {
     { name: "Mia Patel", email: "mia@uni.edu" },
     { name: "Lucas Kim", email: "lucas@uni.edu" },
   ];
-  const firstNames = ["Jack", "Zoe", "Leo", "Ruby", "Owen", "Chloe", "Max", "Lily", "Sam", "Nora", "Kai", "Isla", "Finn", "Maya", "Cole", "Elle", "Jude", "Anya", "Reid", "Tess", "Beau", "Iris", "Cruz", "Wren", "Dean", "Faye", "Gray", "June", "Hugo", "Skye"];
-  const lastNames = ["Adams", "Bell", "Cole", "Diaz", "Ford", "Gray", "Hill", "Ito", "Jones", "Kaur", "Lopez", "Moore", "Novak", "Ortiz", "Price", "Quinn", "Reed", "Shah", "Tran", "Vega", "Ward", "Xu", "Yang", "Zhao", "Ali", "Bose", "Choi", "Dutta", "Efron", "Frost"];
+  const firstNames = [
+    "Jack",
+    "Zoe",
+    "Leo",
+    "Ruby",
+    "Owen",
+    "Chloe",
+    "Max",
+    "Lily",
+    "Sam",
+    "Nora",
+    "Kai",
+    "Isla",
+    "Finn",
+    "Maya",
+    "Cole",
+    "Elle",
+    "Jude",
+    "Anya",
+    "Reid",
+    "Tess",
+    "Beau",
+    "Iris",
+    "Cruz",
+    "Wren",
+    "Dean",
+    "Faye",
+    "Gray",
+    "June",
+    "Hugo",
+    "Skye",
+  ];
+  const lastNames = [
+    "Adams",
+    "Bell",
+    "Cole",
+    "Diaz",
+    "Ford",
+    "Gray",
+    "Hill",
+    "Ito",
+    "Jones",
+    "Kaur",
+    "Lopez",
+    "Moore",
+    "Novak",
+    "Ortiz",
+    "Price",
+    "Quinn",
+    "Reed",
+    "Shah",
+    "Tran",
+    "Vega",
+    "Ward",
+    "Xu",
+    "Yang",
+    "Zhao",
+    "Ali",
+    "Bose",
+    "Choi",
+    "Dutta",
+    "Efron",
+    "Frost",
+  ];
   const students: { id: string; name: string; email: string }[] = [];
   for (let i = 0; i < named.length; i++) {
     const u = await prisma.user.create({
@@ -123,7 +213,8 @@ async function main() {
   const alex = students[0];
   const pool = students.slice(1); // everyone except the primary demo student
 
-  const img = (id: string) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=1200&q=80`;
+  const img = (id: string) =>
+    `https://images.unsplash.com/${id}?auto=format&fit=crop&w=1200&q=80`;
 
   // --- Events ------------------------------------------------------------
   type EventDef = {
@@ -145,7 +236,11 @@ async function main() {
   };
 
   const hostId = (email: string) =>
-    email === "admin@uni.edu" ? admin.id : email === "organizer2@uni.edu" ? organizer2.id : organizer.id;
+    email === "admin@uni.edu"
+      ? admin.id
+      : email === "organizer2@uni.edu"
+        ? organizer2.id
+        : organizer.id;
 
   const eventDefs: EventDef[] = [
     {
@@ -165,8 +260,16 @@ async function main() {
       tags: ["AI", "Machine Learning", "Research", "Keynote"],
       agenda: [
         { time: "09:00", title: "Registration & Coffee" },
-        { time: "10:00", title: "Keynote: The Next Decade of AI", speaker: "Dr. Sarah Chen" },
-        { time: "12:30", title: "Hands-on Lab: Fine-tuning LLMs", speaker: "Priya Patel" },
+        {
+          time: "10:00",
+          title: "Keynote: The Next Decade of AI",
+          speaker: "Dr. Sarah Chen",
+        },
+        {
+          time: "12:30",
+          title: "Hands-on Lab: Fine-tuning LLMs",
+          speaker: "Priya Patel",
+        },
         { time: "15:00", title: "Student Research Showcase" },
       ],
       speakers: [
@@ -302,7 +405,10 @@ async function main() {
         "A practical crash course in human-centered design: empathy mapping, ideation, and rapid prototyping.",
       cover: img("photo-1531403009284-440f080d1e12"),
       tags: ["Design", "UX", "Workshop"],
-      agenda: [{ time: "10:00", title: "Empathize & Define" }, { time: "13:00", title: "Prototype & Test" }],
+      agenda: [
+        { time: "10:00", title: "Empathize & Define" },
+        { time: "13:00", title: "Prototype & Test" },
+      ],
       speakers: [{ name: "Priya Patel", role: "Facilitator", initials: "PP" }],
     },
     {
@@ -323,7 +429,17 @@ async function main() {
     },
   ];
 
-  const events: Record<string, { id: string; startsAt: Date; endsAt: Date; title: string; location: string; categoryName: string }> = {};
+  const events: Record<
+    string,
+    {
+      id: string;
+      startsAt: Date;
+      endsAt: Date;
+      title: string;
+      location: string;
+      categoryName: string;
+    }
+  > = {};
   for (const def of eventDefs) {
     const isPast = def.endsAt < now;
     const created = await prisma.event.create({
@@ -339,6 +455,7 @@ async function main() {
         coverImage: def.cover,
         featured: def.featured ?? false,
         status: EVENT_STATUS.PUBLISHED,
+        approvalStatus: EVENT_APPROVAL_STATUS.ACCEPTED,
         tags: JSON.stringify(def.tags),
         agenda: JSON.stringify(def.agenda),
         speakers: JSON.stringify(def.speakers),
@@ -386,7 +503,9 @@ async function main() {
       ticketCode: ticket(),
       seatNumber: seatCounter[ev.id],
       // Checked in shortly after the event started.
-      checkedInAt: checkedIn ? new Date(ev.startsAt.getTime() + 20 * 60_000) : null,
+      checkedInAt: checkedIn
+        ? new Date(ev.startsAt.getTime() + 20 * 60_000)
+        : null,
     });
   }
 
@@ -419,6 +538,96 @@ async function main() {
 
   await prisma.registration.createMany({ data: regRows });
 
+  // --- Admin demonstration records ---------------------------------------
+  // These records keep the approval, complaint, and fine panels populated
+  // after a fresh seed for demonstrations and screenshots.
+  const requestOne = await prisma.event.create({
+    data: {
+      slug: "student-research-showcase-demo",
+      title: "Student Research Showcase",
+      description:
+        "A showcase of student research projects, prototypes, and applied work across campus.",
+      location: "Innovation Hub, Exhibition Hall",
+      startsAt: days(18),
+      endsAt: days(18),
+      seatLimit: 120,
+      registrationDeadline: days(16),
+      coverImage: img("photo-1523240795612-9a054b0db644"),
+      status: EVENT_STATUS.DRAFT,
+      approvalStatus: EVENT_APPROVAL_STATUS.PENDING,
+      tags: JSON.stringify(["Research", "Students", "Showcase"]),
+      agenda: JSON.stringify([]),
+      speakers: JSON.stringify([]),
+      categoryId: categories.academic.id,
+      hostId: organizer.id,
+    },
+  });
+  await prisma.event.create({
+    data: {
+      slug: "campus-volunteer-day-demo",
+      title: "Campus Volunteer Day",
+      description:
+        "A campus-wide volunteer event connecting students with local community projects.",
+      location: "Student Union, Room 204",
+      startsAt: days(22),
+      endsAt: days(22),
+      seatLimit: 80,
+      registrationDeadline: days(20),
+      coverImage: img("photo-1559027615-cd4628902d4a"),
+      status: EVENT_STATUS.DRAFT,
+      approvalStatus: EVENT_APPROVAL_STATUS.PENDING,
+      tags: JSON.stringify(["Community", "Volunteer"]),
+      agenda: JSON.stringify([]),
+      speakers: JSON.stringify([]),
+      categoryId: categories.business.id,
+      hostId: organizer2.id,
+    },
+  });
+
+  const showcaseRegistration = await prisma.registration.findFirst({
+    where: { eventId: events["yoga"].id, userId: alex.id },
+  });
+  const complaint = await prisma.complaint.create({
+    data: {
+      eventId: events["yoga"].id,
+      participantId: alex.id,
+      category: "venue_problem",
+      subject: "Venue access issue",
+      description:
+        "The assigned studio was locked for the first part of the event and attendees had to wait outside.",
+      status: COMPLAINT_STATUS.UNDER_REVIEW,
+    },
+  });
+  const resolvedComplaint = await prisma.complaint.create({
+    data: {
+      eventId: events["design-bootcamp"].id,
+      participantId: pool[0].id,
+      category: "poor_management",
+      subject: "Workshop schedule change",
+      description:
+        "The advertised afternoon workshop started late and the schedule was not updated for attendees.",
+      status: COMPLAINT_STATUS.RESOLVED,
+      adminNote:
+        "Reviewed with the organizer and recorded as a scheduling issue.",
+      reviewedById: admin.id,
+      reviewedAt: days(-1),
+    },
+  });
+  await prisma.fine.create({
+    data: {
+      complaintId: resolvedComplaint.id,
+      eventId: events["design-bootcamp"].id,
+      eventCreatorId: organizer2.id,
+      issuedById: admin.id,
+      amount: 150,
+      reason: "Repeated schedule changes without attendee notification",
+      status: FINE_STATUS.ISSUED,
+    },
+  });
+  void requestOne;
+  void complaint;
+  void showcaseRegistration;
+
   // --- Feedback (from checked-in pool attendees; not from Alex) ----------
   const comments = [
     "Fantastic session, learned a lot!",
@@ -430,11 +639,18 @@ async function main() {
     "Venue was a little cramped but worth it.",
     "Exceeded my expectations.",
   ];
-  const feedbackRows: { eventId: string; userId: string; rating: number; comment: string | null }[] = [];
+  const feedbackRows: {
+    eventId: string;
+    userId: string;
+    rating: number;
+    comment: string | null;
+  }[] = [];
   const fbSeen = new Set<string>();
   function addFeedback(eventKey: string, limit: number) {
     const ev = events[eventKey];
-    const attended = regRows.filter((r) => r.eventId === ev.id && r.checkedInAt && r.userId !== alex.id);
+    const attended = regRows.filter(
+      (r) => r.eventId === ev.id && r.checkedInAt && r.userId !== alex.id,
+    );
     for (let i = 0; i < Math.min(limit, attended.length); i++) {
       const r = attended[i];
       const k = `${ev.id}|${r.userId}`;
@@ -492,7 +708,9 @@ async function main() {
   console.log(`   • ${userCount} users (admin/organizers/students)`);
   console.log(`   • ${eventCount} events, ${regCount} registrations`);
   console.log(`   • ${feedbackRows.length} feedback entries`);
-  console.log(`   • ${emailCount} Outbox emails (incl. ${reminders} reminders, ${feedbackReqs} feedback requests)`);
+  console.log(
+    `   • ${emailCount} Outbox emails (incl. ${reminders} reminders, ${feedbackReqs} feedback requests)`,
+  );
   console.log(`\n  Demo login (password: ${DEMO_PASSWORD})`);
   console.log(`   • admin@uni.edu       — admin`);
   console.log(`   • organizer@uni.edu   — organizer (hosts most events)`);

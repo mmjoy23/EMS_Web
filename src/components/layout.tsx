@@ -48,20 +48,22 @@ const organizerNav = [
   { icon: Plus, label: "Create Event", screen: "create-event" },
   { icon: FileText, label: "Manage Events", screen: "manage-events" },
   { icon: Users, label: "Participants", screen: "participants" },
+  { icon: Scan, label: "QR Attendance", screen: "organizer-qr" },
   { icon: BarChart2, label: "Reports", screen: "attendance-report" },
   { icon: User, label: "Profile", screen: "profile" },
 ] as const;
 const adminNav = [
-  { icon: LayoutDashboard, label: "Dashboard", screen: "admin-dashboard" },
-  { icon: Scan, label: "QR Scanner", screen: "qr-scanner" },
-  { icon: BarChart2, label: "Reports", screen: "attendance-report" },
-  { icon: Mail, label: "Outbox", screen: "notifications" },
-  { icon: FileText, label: "Events", screen: "manage-events" },
-  { icon: Settings, label: "Settings", screen: "profile" },
+  { icon: FileText, label: "Event Requests", screen: "admin-operations" },
+  { icon: AlertTriangle, label: "Complaints", screen: "admin-operations" },
+  { icon: Gavel, label: "Fines", screen: "admin-operations" },
 ] as const;
 
 function navFor(role: Role) {
-  return role === "student" ? studentNav : role === "organizer" ? organizerNav : adminNav;
+  return role === "student"
+    ? studentNav
+    : role === "organizer"
+      ? organizerNav
+      : adminNav;
 }
 
 /** Presentation for an Outbox email rendered as a notification. */
@@ -129,9 +131,17 @@ function Sidebar({
   const { logout } = useAuth();
   const navItems = navFor(role);
   const roleLabel =
-    role === "student" ? "Student Portal" : role === "organizer" ? "Organizer Hub" : "Admin Console";
+    role === "student"
+      ? "Student Portal"
+      : role === "organizer"
+        ? "Organizer Hub"
+        : "Admin Console";
   const roleColor =
-    role === "student" ? "text-blue-400" : role === "organizer" ? "text-emerald-400" : "text-amber-400";
+    role === "student"
+      ? "text-blue-400"
+      : role === "organizer"
+        ? "text-emerald-400"
+        : "text-amber-400";
 
   const signOut = async () => {
     await logout();
@@ -147,27 +157,42 @@ function Sidebar({
     >
       <div className="flex items-center gap-3 px-4 py-5 border-b border-slate-800 flex-shrink-0">
         <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center flex-shrink-0">
-          <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="currentColor">
+          <svg
+            viewBox="0 0 24 24"
+            className="w-4 h-4 text-white"
+            fill="currentColor"
+          >
             <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" />
           </svg>
         </div>
         {!collapsed && (
           <div className="flex-1 min-w-0">
-            <p className="text-white font-bold text-sm leading-tight">UniEvents</p>
-            <p className={cn("text-xs leading-tight truncate", roleColor)}>{roleLabel}</p>
+            <p className="text-white font-bold text-sm leading-tight">
+              UniEvents
+            </p>
+            <p className={cn("text-xs leading-tight truncate", roleColor)}>
+              {roleLabel}
+            </p>
           </div>
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
           className="ml-auto text-slate-400 hover:text-white transition-colors flex-shrink-0 p-1 rounded-lg hover:bg-slate-800"
         >
-          {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+          {collapsed ? (
+            <ChevronRight className="w-4 h-4" />
+          ) : (
+            <ChevronLeft className="w-4 h-4" />
+          )}
         </button>
       </div>
       <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
         {navItems.map((item) => {
           const isActive = current === item.screen;
-          const badge = item.screen === "notifications" && notifCount > 0 ? notifCount : undefined;
+          const badge =
+            item.screen === "notifications" && notifCount > 0
+              ? notifCount
+              : undefined;
           return (
             <button
               key={item.label}
@@ -180,7 +205,9 @@ function Sidebar({
               )}
             >
               <item.icon className="w-5 h-5 flex-shrink-0" />
-              {!collapsed && <span className="truncate font-medium">{item.label}</span>}
+              {!collapsed && (
+                <span className="truncate font-medium">{item.label}</span>
+              )}
               {!collapsed && badge && !isActive && (
                 <span className="ml-auto bg-red-500 text-white text-xs rounded-full min-w-5 h-5 px-1 flex items-center justify-center flex-shrink-0">
                   {badge}
@@ -246,7 +273,8 @@ function TopNav({
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (bellRef.current && !bellRef.current.contains(e.target as Node)) setBellOpen(false);
+      if (bellRef.current && !bellRef.current.contains(e.target as Node))
+        setBellOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -272,7 +300,9 @@ function TopNav({
           <h1 className="text-base font-bold text-slate-900 dark:text-white">
             {SCREEN_LABELS[screen] || "UniEvents"}
           </h1>
-          <p className="text-xs text-slate-400">University Campus Event System</p>
+          <p className="text-xs text-slate-400">
+            University Campus Event System
+          </p>
         </div>
         <div className="flex items-center gap-2 ml-auto">
           {/* Bell with dropdown */}
@@ -292,11 +322,15 @@ function TopNav({
             {bellOpen && (
               <div
                 className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-700 overflow-hidden z-50"
-                style={{ animation: "slideUp 300ms cubic-bezier(0,0,0.58,1) forwards" }}
+                style={{
+                  animation: "slideUp 300ms cubic-bezier(0,0,0.58,1) forwards",
+                }}
               >
                 <style>{`@keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}`}</style>
                 <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700">
-                  <p className="text-sm font-bold text-slate-900 dark:text-white">Notifications</p>
+                  <p className="text-sm font-bold text-slate-900 dark:text-white">
+                    Notifications
+                  </p>
                   <button
                     onClick={() => {
                       setBellOpen(false);
@@ -309,7 +343,9 @@ function TopNav({
                 </div>
                 <div className="divide-y divide-slate-50 dark:divide-slate-700 max-h-72 overflow-y-auto">
                   {recent.length === 0 && (
-                    <p className="px-4 py-6 text-center text-xs text-slate-400">No notifications yet</p>
+                    <p className="px-4 py-6 text-center text-xs text-slate-400">
+                      No notifications yet
+                    </p>
                   )}
                   {recent.map((n) => {
                     const meta = emailNotif(n.type);
@@ -326,13 +362,22 @@ function TopNav({
                           <meta.Icon className={cn("w-4 h-4", meta.color)} />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-slate-900 dark:text-white">{meta.label}</p>
+                          <p className="text-xs font-bold text-slate-900 dark:text-white">
+                            {meta.label}
+                          </p>
                           <p className="text-xs text-slate-500 dark:text-slate-400 leading-snug mt-0.5 line-clamp-2">
                             {n.subject}
                           </p>
-                          <p className="text-xs text-slate-400 mt-0.5">{relativeFromNow(n.createdAt)}</p>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            {relativeFromNow(n.createdAt)}
+                          </p>
                         </div>
-                        <span className={cn("w-2 h-2 rounded-full mt-1.5 flex-shrink-0", meta.dot)} />
+                        <span
+                          className={cn(
+                            "w-2 h-2 rounded-full mt-1.5 flex-shrink-0",
+                            meta.dot,
+                          )}
+                        />
                       </div>
                     );
                   })}
@@ -352,7 +397,11 @@ function TopNav({
               animate={{ rotate: 0, opacity: 1 }}
               transition={{ duration: 0.3, ease: [0, 0, 0.58, 1] }}
             >
-              {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              {isDark ? (
+                <Sun className="w-5 h-5" />
+              ) : (
+                <Moon className="w-5 h-5" />
+              )}
             </motion.div>
           </button>
 
@@ -425,7 +474,13 @@ export function AppLayout({
           collapsed ? "ml-16" : "ml-60",
         )}
       >
-        <TopNav nav={nav} isDark={isDark} setIsDark={setIsDark} screen={screen} messages={messages} />
+        <TopNav
+          nav={nav}
+          isDark={isDark}
+          setIsDark={setIsDark}
+          screen={screen}
+          messages={messages}
+        />
         <main className="flex-1 p-6">
           <motion.div
             key={screen}

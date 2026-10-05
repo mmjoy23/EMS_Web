@@ -70,6 +70,7 @@ export interface EventDTO {
   endsAt: string;
   registrationDeadline: string | null;
   seatLimit: number;
+  priceCents: number;
   registeredCount: number;
   remaining: number;
   checkedInCount: number;
@@ -77,6 +78,11 @@ export interface EventDTO {
   coverImage: string | null;
   featured: boolean;
   status: EventStatus;
+  approvalStatus?: "pending" | "accepted" | "rejected";
+  reviewedById?: string | null;
+  reviewedAt?: string | null;
+  rejectionReason?: string | null;
+  allowCancellation?: boolean;
   tags: string[];
   agenda: AgendaItem[];
   speakers: Speaker[];
@@ -101,6 +107,18 @@ export interface Registration {
   createdAt: string;
   event?: EventDTO;
   user?: Person;
+}
+
+export interface CancellationPreview {
+  event: { id: string; title: string; startsAt: string };
+  paidAmountCents: number;
+  paymentStatus: string;
+  penaltyPercentage: number;
+  penaltyAmountCents: number;
+  refundAmountCents: number;
+  hoursRemaining: number;
+  isFree: boolean;
+  refundStatus: string;
 }
 
 /** A participant row (registration + full person), used by manager views. */
@@ -182,6 +200,60 @@ export interface FeedbackSummary {
   count: number;
   average: number;
   distribution: { star: number; count: number }[];
+}
+
+export type ComplaintStatus =
+  | "submitted"
+  | "under_review"
+  | "resolved"
+  | "dismissed";
+export type FineStatus = "issued" | "paid" | "waived";
+export type ComplaintCategory =
+  | "event_cancelled"
+  | "misleading_information"
+  | "organizer_misconduct"
+  | "venue_problem"
+  | "registration_problem"
+  | "poor_management"
+  | "payment_issue"
+  | "other";
+
+export interface ComplaintEntry {
+  id: string;
+  category: ComplaintCategory;
+  subject: string;
+  description: string;
+  evidencePath: string | null;
+  status: ComplaintStatus;
+  adminNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+  reviewedAt: string | null;
+  event?: EventDTO;
+  participant?: Person;
+  reviewedBy?: Person | null;
+  fine?: FineEntry | null;
+  fineOutcome?: string | null;
+}
+
+export interface ComplaintSummary {
+  total: number;
+  underReview: number;
+  resolved: number;
+}
+
+export interface FineEntry {
+  id: string;
+  complaintId: string | null;
+  eventId: string;
+  amount: number;
+  reason: string;
+  status: FineStatus;
+  issuedAt: string;
+  updatedAt: string;
+  event?: EventDTO;
+  eventCreator?: Person;
+  issuedBy?: Person;
 }
 
 // ---- Stats (role-dependent) ----------------------------------------------

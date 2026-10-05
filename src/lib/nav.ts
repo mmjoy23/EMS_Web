@@ -25,7 +25,10 @@ export type Screen =
   | "participants"
   | "admin-dashboard"
   | "qr-scanner"
-  | "attendance-report";
+  | "attendance-report"
+  | "admin-operations"
+  | "organizer-qr"
+  | "issues";
 
 export interface NavParams {
   eventId?: string;
@@ -46,6 +49,6 @@ export interface ScreenProps {
 /** Default landing screen for a role after login. */
 export function homeScreen(role: Role): Screen {
   if (role === "organizer") return "organizer-dashboard";
-  if (role === "admin") return "admin-dashboard";
+  if (role === "admin") return "admin-operations";
   return "student-dashboard";
 }
